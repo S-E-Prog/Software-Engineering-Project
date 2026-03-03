@@ -1,15 +1,15 @@
 package domain;
 
 public class property {
-	
+
 	private final String propertyId;
 	private String address;
 	private String description;
 	private double price;
 	private int maxViewingCapacity;
-	
+
 	public property(String propertyId, String address, String description, double price, int maxViewingCapacity) {
-		super();
+
 		this.propertyId = propertyId;
 		this.address = address;
 		this.description = description;
@@ -52,14 +52,11 @@ public class property {
 	public String getPropertyId() {
 		return propertyId;
 	}
-	
-	 @Override
-	    public String toString() {
-	        return "Property{id='" + propertyId + "', address='" + address + 
-	                ", price=" + price + "}";
-	    }
-	
-	
-	
-}
 
+	@Override
+	public String toString() {
+		return "Property{id='" + propertyId + "', address='" + address +
+				", price=" + price + "}";
+	}
+
+}
