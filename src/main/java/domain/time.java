@@ -8,7 +8,7 @@ public class time {
 
     private LocalDateTime datetime = LocalDateTime.now();
     private LocalDateTime endDateTime = LocalDateTime.now().plusMinutes(30);
-
+    private int maxtimeview = 45;
     private static final DateTimeFormatter dateformat = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm");
     private static final DateTimeFormatter hourformat = DateTimeFormatter.ofPattern("HH:mm:ss");
 
@@ -29,10 +29,10 @@ public class time {
     }
 
     public void setenddate(int minute) {
-        if (minute <= 45) {
+        if (minute <= maxtimeview) {
             endDateTime = datetime.plusMinutes(minute);
         } else {
-            System.out.println("minute must be less than 45");
+            System.out.println("minute must be less than " + maxtimeview);
         }
 
     }

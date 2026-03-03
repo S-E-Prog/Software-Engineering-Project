@@ -1,79 +1,71 @@
 package domain;
 
-
 public class appointment {
 
-	 private final String appointmentId;
-	 private final user   bookedBy;
-	 private final property property;
-	 private timeslot timeSlot;
-	 private AppointmentStatus status;	 
-	 
-	 
-	 public enum AppointmentStatus {
-		    CONFIRMED,
-		    CANCELLED,
-		    COMPLETED
-		}
-	 
-	 
-	  public appointment(String appointmentId, user bookedBy, property property,timeslot timeSlot) {
-		  this.appointmentId = appointmentId;
-		  this.bookedBy      = bookedBy;
-		  this.property      = property;
-		  this.timeSlot      = timeSlot;
-		  this.status        = AppointmentStatus.CONFIRMED;
-		  }
-	  
+	private final String appointmentId;
+	private final user bookedBy;
+	private final property property;
+	private time appointmentTime;
+	private AppointmentStatus status;
 
+	public enum AppointmentStatus {
+		CONFIRMED,
+		CANCELLED,
+		COMPLETED
+	}
 
-	    public void cancel() {
-	        this.status = AppointmentStatus.CANCELLED;
-	    }
+	public appointment(String appointmentId, user bookedBy, property property, time appointmentTime) {
+		this.appointmentId = appointmentId;
+		this.bookedBy = bookedBy;
+		this.property = property;
+		this.appointmentTime = appointmentTime;
+		this.status = AppointmentStatus.CONFIRMED;
+	}
 
-	    public void complete() {
-	        this.status = AppointmentStatus.COMPLETED;
-	    }
-	    
-	    public boolean isConfirmed() {
-	        return status == AppointmentStatus.CONFIRMED &&timeSlot.getStartTime().isAfter(java.time.LocalDateTime.now());
-	    }
-	   
+	public void cancel() {
+		this.status = AppointmentStatus.CANCELLED;
+	}
 
-		public timeslot getTimeSlot() {
-			return timeSlot;
-		}
+	public void complete() {
+		this.status = AppointmentStatus.COMPLETED;
+	}
 
-		public void setTimeSlot(timeslot timeSlot) {
-			this.timeSlot = timeSlot;
-		}
+	public boolean isConfirmed() {
+		return status == AppointmentStatus.CONFIRMED && appointmentTime.isstart() && !appointmentTime.isend();
+	}
 
-		public AppointmentStatus getStatus() {
-			return status;
-		}
+	public time getAppointmentTime() {
+		return appointmentTime;
+	}
 
-		public void setStatus(AppointmentStatus status) {
-			this.status = status;
-		}
+	public void setAppointmentTime(time appointmentTime) {
+		this.appointmentTime = appointmentTime;
+	}
 
+	public AppointmentStatus getStatus() {
+		return status;
+	}
 
-		public String getAppointmentId() {
-			return appointmentId;
-		}
+	public void setStatus(AppointmentStatus status) {
+		this.status = status;
+	}
 
-		public user getBookedBy() {
-			return bookedBy;
-		}
+	public String getAppointmentId() {
+		return appointmentId;
+	}
 
-		public property getProperty() {
-			return property;
-		}
-		
-		 @Override
-		    public String toString() {
-		        return "Appointment{id='" + appointmentId + "', property=" + 
-		               property.getAddress() + ", time=" + timeSlot + 
-		               ", status=" + status + "}";
-		    }
-	  
+	public user getBookedBy() {
+		return bookedBy;
+	}
+
+	public property getProperty() {
+		return property;
+	}
+
+	@Override
+	public String toString() {
+		return "Appointment{id='" + appointmentId + "', property=" + property.getAddress() + ", time=" + appointmentTime
+				+ ", status=" + status + "}";
+	}
+
 }
