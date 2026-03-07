@@ -8,6 +8,7 @@ public class mangfile {
     private static final String customer = "src/main/java/resources/customerslist.dat";
     private static final String seller = "src/main/java/resources/sellerslist.dat";
     private static final String property = "src/main/java/resources/propertieslist.dat";
+    private static final String appointment = "src/main/java/resources/appointmentslist.dat";
 
     public static void savecustomer(ArrayList<user> customlist) {
         try (ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(customer))) {
@@ -66,12 +67,29 @@ public class mangfile {
         } catch (IOException e) {
             e.printStackTrace();
 
-}
+        }
     }
 
     public static ArrayList<property> loadproperty() {
         try (ObjectInputStream in = new ObjectInputStream(new FileInputStream(property))) {
             return (ArrayList<property>) in.readObject();
+        } catch (IOException | ClassNotFoundException e) {
+            e.printStackTrace();
+            return new ArrayList<>();
+        }
+    }
+
+    public static void saveappointment(ArrayList<appointment> appointmentlist) {
+        try (ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(appointment))) {
+            out.writeObject(appointmentlist);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static ArrayList<appointment> loadappointment() {
+        try (ObjectInputStream in = new ObjectInputStream(new FileInputStream(appointment))) {
+            return (ArrayList<appointment>) in.readObject();
         } catch (IOException | ClassNotFoundException e) {
             e.printStackTrace();
             return new ArrayList<>();
