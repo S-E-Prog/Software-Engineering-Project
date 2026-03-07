@@ -1,6 +1,8 @@
 package domain;
 
-public class property {
+import java.io.Serializable;
+
+public class property implements Serializable {
 
 	private final String propertyId;
 	private String address;

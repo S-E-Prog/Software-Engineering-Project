@@ -3,8 +3,9 @@ package domain;
 import java.time.LocalDateTime;
 import java.time.Duration;
 import java.time.format.DateTimeFormatter;
+import java.io.Serializable;
 
-public class time {
+public class time implements Serializable {
 
     private LocalDateTime datetime = LocalDateTime.now();
     private LocalDateTime endDateTime = LocalDateTime.now().plusMinutes(30);
