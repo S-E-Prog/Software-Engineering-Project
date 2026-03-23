@@ -5,18 +5,20 @@ import java.io.Serializable;
 public class property implements Serializable {
 
 	private final String propertyId;
+	private String name;
 	private String address;
 	private String description;
 	private double price;
-	private int maxViewingCapacity;
-
-	public property(String propertyId, String address, String description, double price, int maxViewingCapacity) {
-
+	private int maxParticipants;
+	
+	public property(String propertyId, String name, String address, String description, double price, int maxViewingCapacity) {
+		super();
 		this.propertyId = propertyId;
+		this.name=name;
 		this.address = address;
 		this.description = description;
 		this.price = price;
-		this.maxViewingCapacity = maxViewingCapacity;
+		this.maxParticipants = maxViewingCapacity;
 	}
 
 	public String getAddress() {
@@ -27,6 +29,14 @@ public class property implements Serializable {
 		this.address = address;
 	}
 
+	public String getName() {
+		return name;
+	}
+
+	public void setName(String name) {
+		this.name = name;
+	}
+	
 	public String getDescription() {
 		return description;
 	}
@@ -44,11 +54,11 @@ public class property implements Serializable {
 	}
 
 	public int getMaxViewingCapacity() {
-		return maxViewingCapacity;
+		return maxParticipants;
 	}
 
-	public void setMaxViewingCapacity(int maxViewingCapacity) {
-		this.maxViewingCapacity = maxViewingCapacity;
+	public void setMaxViewingCapacity(int maxParticipants) {
+		this.maxParticipants = maxParticipants;
 	}
 
 	public String getPropertyId() {
