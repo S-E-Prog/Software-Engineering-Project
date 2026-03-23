@@ -1,7 +1,9 @@
 package domain;
 
-public class property {
-	
+import java.io.Serializable;
+
+public class property implements Serializable {
+
 	private final String propertyId;
 	private String name;
 	private String address;
@@ -62,14 +64,11 @@ public class property {
 	public String getPropertyId() {
 		return propertyId;
 	}
-	
-	 @Override
-	    public String toString() {
-	        return "Property{id='" + propertyId + "', address='" + address + 
-	                ", price=" + price + "}";
-	    }
-	
-	
-	
-}
 
+	@Override
+	public String toString() {
+		return "Property{id='" + propertyId + "', address='" + address +
+				", price=" + price + "}";
+	}
+
+}
