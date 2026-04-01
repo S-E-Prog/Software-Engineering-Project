@@ -4,93 +4,42 @@ import java.io.*;
 import java.util.*;
 
 public class mangfile {
-    private static final String admin = "src/main/java/resources/adminslist.dat";
-    private static final String customer = "src/main/java/resources/customerslist.dat";
-    private static final String seller = "src/main/java/resources/sellerslist.dat";
-    private static final String property = "src/main/java/resources/propertieslist.dat";
-    private static final String appointment = "src/main/java/resources/appointmentslist.dat";
 
-    public static void savecustomer(ArrayList<user> customlist) {
-        try (ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(customer))) {
-            out.writeObject(customlist);
+    public enum FileType {
+    ADMIN("src/main/java/resources/adminslist.dat"),
+    CUSTOMER("src/main/java/resources/customerslist.dat"),
+    SELLER("src/main/java/resources/sellerslist.dat"),
+    PROPERTY("src/main/java/resources/propertieslist.dat"),
+    APPOINTMENT("src/main/java/resources/appointmentslist.dat");
+
+    private final String path;
+
+    // "Constructor" للـ Enum لتحديد المسار لكل نوع
+    FileType(String path) {
+        this.path = path;
+    }
+
+    public String getPath() {
+        return path;
+    }
+}
+  public static <T> void saveToFile(FileType fileType, ArrayList<T> list) {
+        try (ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(fileType.getPath()))) {
+            out.writeObject(list);
         } catch (IOException e) {
+            System.err.println("Error saving to: " + fileType.getPath());
             e.printStackTrace();
         }
     }
+    @SuppressWarnings("unchecked")
+    public static <T> ArrayList<T> loadFromFile(FileType fileType) {
+        File file = new File(fileType.getPath());
+        if (!file.exists()) return new ArrayList<>(); // إذا لم يوجد الملف، ارجع قائمة فارغة
 
-    public static ArrayList<user> loadcustomer() {
-        try (ObjectInputStream in = new ObjectInputStream(new FileInputStream(customer))) {
-            return (ArrayList<user>) in.readObject();
+        try (ObjectInputStream in = new ObjectInputStream(new FileInputStream(file))) {
+            return (ArrayList<T>) in.readObject();
         } catch (IOException | ClassNotFoundException e) {
-            e.printStackTrace();
-            return new ArrayList<>();
-        }
-    }
-
-    public static void saveadmin(ArrayList<user> adminlist) {
-        try (ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(admin))) {
-            out.writeObject(adminlist);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    public static ArrayList<user> loadadmin() {
-        try (ObjectInputStream in = new ObjectInputStream(new FileInputStream(admin))) {
-            return (ArrayList<user>) in.readObject();
-        } catch (IOException | ClassNotFoundException e) {
-            e.printStackTrace();
-            return new ArrayList<>();
-        }
-    }
-
-    public static void saveseller(ArrayList<user> sellerlist) {
-        try (ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(seller))) {
-            out.writeObject(sellerlist);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    public static ArrayList<user> loadseller() {
-        try (ObjectInputStream in = new ObjectInputStream(new FileInputStream(seller))) {
-            return (ArrayList<user>) in.readObject();
-        } catch (IOException | ClassNotFoundException e) {
-            e.printStackTrace();
-            return new ArrayList<>();
-        }
-    }
-
-    public static void saveproperty(ArrayList<property> propertylist) {
-        try (ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(property))) {
-            out.writeObject(propertylist);
-        } catch (IOException e) {
-            e.printStackTrace();
-
-        }
-    }
-
-    public static ArrayList<property> loadproperty() {
-        try (ObjectInputStream in = new ObjectInputStream(new FileInputStream(property))) {
-            return (ArrayList<property>) in.readObject();
-        } catch (IOException | ClassNotFoundException e) {
-            e.printStackTrace();
-            return new ArrayList<>();
-        }
-    }
-
-    public static void saveappointment(ArrayList<appointment> appointmentlist) {
-        try (ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(appointment))) {
-            out.writeObject(appointmentlist);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    public static ArrayList<appointment> loadappointment() {
-        try (ObjectInputStream in = new ObjectInputStream(new FileInputStream(appointment))) {
-            return (ArrayList<appointment>) in.readObject();
-        } catch (IOException | ClassNotFoundException e) {
+            System.err.println("Error loading from: " + fileType.getPath());
             e.printStackTrace();
             return new ArrayList<>();
         }
