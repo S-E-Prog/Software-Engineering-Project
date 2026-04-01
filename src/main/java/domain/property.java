@@ -10,15 +10,25 @@ public class property implements Serializable {
 	private String description;
 	private double price;
 	private int maxParticipants;
-	
-	public property(String propertyId, String name, String address, String description, double price, int maxViewingCapacity) {
+	private user owner;
+
+	public property(String propertyId, String name, String address, String description, double price, int maxViewingCapacity, user owner) {
 		super();
 		this.propertyId = propertyId;
-		this.name=name;
+		this.name = name;
 		this.address = address;
 		this.description = description;
 		this.price = price;
 		this.maxParticipants = maxViewingCapacity;
+		this.owner = owner;
+	}
+
+	public user getOwner() {
+		return owner;
+	}
+
+	public void setOwner(user owner) {
+		this.owner = owner;
 	}
 
 	public String getAddress() {
@@ -36,7 +46,7 @@ public class property implements Serializable {
 	public void setName(String name) {
 		this.name = name;
 	}
-	
+
 	public String getDescription() {
 		return description;
 	}
@@ -65,10 +75,5 @@ public class property implements Serializable {
 		return propertyId;
 	}
 
-	@Override
-	public String toString() {
-		return "Property{id='" + propertyId + "', address='" + address +
-				", price=" + price + "}";
-	}
 
 }
