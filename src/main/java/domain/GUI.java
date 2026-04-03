@@ -499,6 +499,86 @@ class InnerGUI extends JFrame implements ActionListener {
     }
 
     // ================================================================
+    //  ADD PROPERTY DIALOG
+    // ================================================================
+    
+    private void showAddPropertyDialog() {
+        loadData();
+                if (customList.isEmpty() ) {
+            msg("You need at least one user first."); return;
+        }
+        JDialog dlg = new JDialog(this, "Add Property", true);
+        dlg.setSize(400, 370);
+        dlg.setLocationRelativeTo(this);
+        dlg.setLayout(new BorderLayout());
+
+        JPanel form = new JPanel(new GridBagLayout());
+        form.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+        GridBagConstraints g = new GridBagConstraints();
+        g.fill   = GridBagConstraints.HORIZONTAL;
+        g.insets = new Insets(6, 6, 6, 6);
+
+        JTextField tfName  = new JTextField(18);
+        JTextField tfAddr  = new JTextField(18);
+        JTextField tfDesc  = new JTextField(18);
+        JTextField tfPrice = new JTextField(18);
+        JTextField tfCap   = new JTextField(18);
+
+        String[]    labels = {"Name:", "Address:", "Description:", "Price:", "Capacity:"};
+        JTextField[] fields = {tfName, tfAddr, tfDesc, tfPrice, tfCap};
+
+        for (int i = 0; i < fields.length; i++) {
+            g.gridx = 0; g.gridy = i; form.add(new JLabel(labels[i]), g);
+            g.gridx = 1;              form.add(fields[i], g);
+        }
+
+   
+        String[] ownerNames = customList.stream().map(user::getName).toArray(String[]::new);
+        JComboBox<String> ownerCombo = new JComboBox<>(ownerNames);
+        g.gridx = 0; g.gridy = fields.length; form.add(new JLabel("Owner:"), g);
+        g.gridx = 1;                           form.add(ownerCombo, g);
+
+        JPanel btns = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
+        JButton save   = new JButton("Save");
+        JButton cancel = new JButton("Cancel");
+        style(save, PRIMARY); style(cancel, GRAY_BTN);
+
+        save.addActionListener(e -> {
+            if (tfName.getText().trim().isEmpty() || tfAddr.getText().trim().isEmpty()) {
+                msg("Name and Address are required!"); return;
+            }
+            if (customList.isEmpty()) {
+                msg("You need at least one user to assign as owner!"); return;
+            }
+            try {
+                double price   = Double.parseDouble(tfPrice.getText().trim());
+                int    cap     = Integer.parseInt(tfCap.getText().trim());
+                user   owner   = customList.get(ownerCombo.getSelectedIndex());
+                String newId   = "P" + String.format("%03d", propertiesList.size() + 1);
+                propertiesList.add(new property(
+                    newId,
+                    tfName.getText().trim(),
+                    tfAddr.getText().trim(),
+                    tfDesc.getText().trim(),
+                    price, cap, owner
+                ));
+                mangfile.saveToFile(mangfile.FileType.PROPERTY, propertiesList);
+                refreshProperties();
+                msg("Property added!");
+                dlg.dispose();
+            } catch (NumberFormatException ex) {
+                msg("Price must be a number and Capacity must be a whole number.");
+            }
+        });
+        cancel.addActionListener(e -> dlg.dispose());
+
+        btns.add(save); btns.add(cancel);
+        dlg.add(form, BorderLayout.CENTER);
+        dlg.add(btns, BorderLayout.SOUTH);
+        dlg.setVisible(true);
+    }
+
+    // ================================================================
     //  USERS TAB
     // ================================================================
     private JPanel buildUsersTab() {
@@ -656,79 +736,6 @@ class InnerGUI extends JFrame implements ActionListener {
             refreshProperties();
             msg("Property deleted.");
         }
-    }
-
-    private void showAddPropertyDialog() {
-        loadData();
-        JDialog dlg = new JDialog(this, "Add Property", true);
-        dlg.setSize(400, 370);
-        dlg.setLocationRelativeTo(this);
-        dlg.setLayout(new BorderLayout());
-
-        JPanel form = new JPanel(new GridBagLayout());
-        form.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
-        GridBagConstraints g = new GridBagConstraints();
-        g.fill   = GridBagConstraints.HORIZONTAL;
-        g.insets = new Insets(6, 6, 6, 6);
-
-        JTextField tfName  = new JTextField(18);
-        JTextField tfAddr  = new JTextField(18);
-        JTextField tfDesc  = new JTextField(18);
-        JTextField tfPrice = new JTextField(18);
-        JTextField tfCap   = new JTextField(18);
-
-        String[]    labels = {"Name:", "Address:", "Description:", "Price:", "Capacity:"};
-        JTextField[] fields = {tfName, tfAddr, tfDesc, tfPrice, tfCap};
-
-        for (int i = 0; i < fields.length; i++) {
-            g.gridx = 0; g.gridy = i; form.add(new JLabel(labels[i]), g);
-            g.gridx = 1;              form.add(fields[i], g);
-        }
-
-   
-        String[] ownerNames = customList.stream().map(user::getName).toArray(String[]::new);
-        JComboBox<String> ownerCombo = new JComboBox<>(ownerNames);
-        g.gridx = 0; g.gridy = fields.length; form.add(new JLabel("Owner:"), g);
-        g.gridx = 1;                           form.add(ownerCombo, g);
-
-        JPanel btns = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
-        JButton save   = new JButton("Save");
-        JButton cancel = new JButton("Cancel");
-        style(save, PRIMARY); style(cancel, GRAY_BTN);
-
-        save.addActionListener(e -> {
-            if (tfName.getText().trim().isEmpty() || tfAddr.getText().trim().isEmpty()) {
-                msg("Name and Address are required!"); return;
-            }
-            if (customList.isEmpty()) {
-                msg("You need at least one user to assign as owner!"); return;
-            }
-            try {
-                double price   = Double.parseDouble(tfPrice.getText().trim());
-                int    cap     = Integer.parseInt(tfCap.getText().trim());
-                user   owner   = customList.get(ownerCombo.getSelectedIndex());
-                String newId   = "P" + String.format("%03d", propertiesList.size() + 1);
-                propertiesList.add(new property(
-                    newId,
-                    tfName.getText().trim(),
-                    tfAddr.getText().trim(),
-                    tfDesc.getText().trim(),
-                    price, cap, owner
-                ));
-                mangfile.saveToFile(mangfile.FileType.PROPERTY, propertiesList);
-                refreshProperties();
-                msg("Property added!");
-                dlg.dispose();
-            } catch (NumberFormatException ex) {
-                msg("Price must be a number and Capacity must be a whole number.");
-            }
-        });
-        cancel.addActionListener(e -> dlg.dispose());
-
-        btns.add(save); btns.add(cancel);
-        dlg.add(form, BorderLayout.CENTER);
-        dlg.add(btns, BorderLayout.SOUTH);
-        dlg.setVisible(true);
     }
 
     // ================================================================

@@ -36,8 +36,9 @@ public class appointment implements Serializable {
 		return status == AppointmentStatus.CONFIRMED && appointmentTime.isstart() && !appointmentTime.isend();
 	}
 
-	public time getAppointmentTime() {
-		return appointmentTime;
+	public String getAppointmentTime() {
+		time appTime=this.appointmentTime;
+		return this.appointmentTime.toString()+ " to "+appTime.toStringendtime() ;
 	}
 
 	public void setAppointmentTime(time appointmentTime) {

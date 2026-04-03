@@ -6,9 +6,8 @@ import java.util.*;
 public class mangfile {
 
     public enum FileType {
-    ADMIN("src/main/java/resources/adminslist.dat"),
+  
     CUSTOMER("src/main/java/resources/customerslist.dat"),
-    SELLER("src/main/java/resources/sellerslist.dat"),
     PROPERTY("src/main/java/resources/propertieslist.dat"),
     APPOINTMENT("src/main/java/resources/appointmentslist.dat");
 

@@ -8,10 +8,10 @@ import java.io.Serializable;
 public class time implements Serializable {
 
     private LocalDateTime datetime = LocalDateTime.now();
-    private LocalDateTime endDateTime = LocalDateTime.now().plusMinutes(30);
+    private LocalDateTime endDateTime = LocalDateTime.now();
     private int maxtimeview = 45;
     private static final DateTimeFormatter dateformat = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm");
-    private static final DateTimeFormatter hourformat = DateTimeFormatter.ofPattern("HH:mm:ss");
+    private static final DateTimeFormatter hourformat = DateTimeFormatter.ofPattern("HH:mm");
 
     public void setdate(int hour, int minute, int... date) {
         LocalDateTime now = LocalDateTime.now();
@@ -36,6 +36,14 @@ public class time implements Serializable {
             System.out.println("minute must be less than " + maxtimeview);
         }
 
+    }
+
+    public LocalDateTime getdatetime() {
+        return datetime;
+    }
+
+    public LocalDateTime getendDateTime() {
+        return endDateTime;
     }
 
     public boolean isstart() {
@@ -72,7 +80,12 @@ public class time implements Serializable {
             return true;
         return false;
     }
-
+     public String toStringendtime() {
+        return endDateTime.format(hourformat);
+    }
+ public String toStringhm() {
+        return datetime.format(hourformat);
+    }
     @Override
     public String toString() {
         return datetime.format(dateformat);
