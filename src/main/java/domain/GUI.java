@@ -258,11 +258,12 @@ class InnerGUI extends JFrame implements ActionListener {
         content.removeAll();
         loadData();
 
-        int completed = 0, cancelled = 0, confirmed = 0;
+        int completed = 0, cancelled = 0, confirmed = 0, available = 0;
         for (appointment a : appointmentsList) {
             if (a.getStatus() == appointment.AppointmentStatus.COMPLETED) completed++;
             if (a.getStatus() == appointment.AppointmentStatus.CANCELLED)  cancelled++;
               if (a.getStatus() == appointment.AppointmentStatus.CONFIRMED) confirmed++;
+              if (a.getStatus() == appointment.AppointmentStatus.AVAILABLE) available++;
         }
 
         GridBagConstraints g = new GridBagConstraints();
@@ -278,13 +279,18 @@ class InnerGUI extends JFrame implements ActionListener {
 
         // Row 1 
         
-        g.gridy = 1;
-        g.gridx = 0; content.add(statCard("Completed", String.valueOf(completed), new Color(52, 152, 219)), g);
-        g.gridx = 1; content.add(statCard("Cancelled",  String.valueOf(cancelled),  RED), g);
-        g.gridx = 2; content.add(statCard("Confirmed", String.valueOf(confirmed), new Color(46, 204, 113)), g);
+         g.gridy = 1;
+         g.gridx = 0; content.add(statCard("Available", String.valueOf(available), new Color(100, 250, 150)), g);
+         g.gridx = 1; content.add(statCard("Confirmed", String.valueOf(confirmed), new Color(240, 204, 50)), g);
+         g.gridx = 2; content.add(statCard("Completed", String.valueOf(completed), new Color(52, 152, 219)), g);
+        
+        // Row 2 
 
-        // Row 2
-        g.gridy = 2; g.gridx = 0; g.gridwidth = 3; g.weighty = 0.5;
+         g.gridy = 2;
+         g.gridx = 1; content.add(statCard("Cancelled",  String.valueOf(cancelled),  RED), g);
+
+        // Row 3
+        g.gridy = 3; g.gridx = 0; g.gridwidth = 3; g.weighty = 0.5;
         content.add(buildRecentTable(), g);
 
         content.revalidate();
