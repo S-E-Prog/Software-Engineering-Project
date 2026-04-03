@@ -11,6 +11,7 @@ public class appointment implements Serializable {
 	private AppointmentStatus status;
 
 	public enum AppointmentStatus {
+		AVAILABLE,
 		CONFIRMED,
 		CANCELLED,
 		COMPLETED
@@ -21,7 +22,7 @@ public class appointment implements Serializable {
 		this.bookedBy = bookedBy;
 		this.property = property;
 		this.appointmentTime = appointmentTime;
-		this.status = AppointmentStatus.CONFIRMED;
+		this.status = AppointmentStatus.AVAILABLE;
 	}
 
 	public void cancel() {
@@ -31,10 +32,20 @@ public class appointment implements Serializable {
 	public void complete() {
 		this.status = AppointmentStatus.COMPLETED;
 	}
+	
+	public void confirm() {
+		this.status = AppointmentStatus.CONFIRMED;
+	}
+
+	public boolean isAvailable() {
+		return status == AppointmentStatus.AVAILABLE;
+	}
 
 	public boolean isConfirmed() {
 		return status == AppointmentStatus.CONFIRMED && appointmentTime.isstart() && !appointmentTime.isend();
 	}
+
+	
 
 	public String getAppointmentTime() {
 		time appTime=this.appointmentTime;

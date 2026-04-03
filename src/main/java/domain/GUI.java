@@ -413,90 +413,97 @@ class InnerGUI extends JFrame implements ActionListener {
         dlg.setVisible(true);
     }
 
-    // ================================================================
-    //  ADD APPOINTMENT DIALOG
-    // ================================================================
-    private void showAddAppointmentDialog() {
-        loadData();
-        if (customList.isEmpty() || propertiesList.isEmpty()) {
-            msg("You need at least one user and one property first."); return;
+   // ================================================================
+//  ADD APPOINTMENT DIALOG
+// ================================================================
+private void showAddAppointmentDialog() {
+    loadData();
+    if (propertiesList.isEmpty()) {
+        msg("You need at least one property first."); return;
+    }
+
+    JDialog dlg = new JDialog(this, "Add New Appointment", true);
+    dlg.setSize(450, 320);
+    dlg.setLocationRelativeTo(this);
+    dlg.setLayout(new BorderLayout());
+
+    JPanel form = new JPanel(new GridBagLayout());
+    form.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+    GridBagConstraints g = new GridBagConstraints();
+    g.fill   = GridBagConstraints.HORIZONTAL;
+    g.insets = new Insets(6, 6, 6, 6);
+
+    String[] propNames = propertiesList.stream().map(property::getName).toArray(String[]::new);
+    user[] owners = propertiesList.stream().map(property::getOwner).toArray(user[]::new);
+
+    JComboBox<String> propCombo = new JComboBox<>(propNames);
+
+    
+    JLabel ownerLabel = new JLabel(owners[0] != null ? owners[0].getName() : "N/A");
+    propCombo.addActionListener(ev -> {
+        int idx = propCombo.getSelectedIndex();
+        ownerLabel.setText(owners[idx] != null ? owners[idx].getName() : "N/A");
+    });
+
+    JTextField tfDate    = new JTextField(18);
+    JTextField tfTime    = new JTextField(18);
+    JTextField tfEndTime = new JTextField(18);
+    tfDate.setToolTipText("Format: yyyy-MM-dd");
+    tfTime.setToolTipText("Format: HH:mm");
+    tfEndTime.setToolTipText("Format: mm");
+
+    g.gridx = 0; g.gridy = 0; form.add(new JLabel("Property:"),                      g); g.gridx = 1; form.add(propCombo,  g);
+    g.gridx = 0; g.gridy = 1; form.add(new JLabel("Owner:"),                          g); g.gridx = 1; form.add(ownerLabel, g);
+    g.gridx = 0; g.gridy = 2; form.add(new JLabel("Date (yyyy-MM-dd):"),              g); g.gridx = 1; form.add(tfDate,     g);
+    g.gridx = 0; g.gridy = 3; form.add(new JLabel("Time (HH:mm):"),                   g); g.gridx = 1; form.add(tfTime,     g);
+    g.gridx = 0; g.gridy = 4; form.add(new JLabel("EndTime (mm) the max 45minutes:"), g); g.gridx = 1; form.add(tfEndTime,  g);
+
+    JPanel btns = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
+    JButton save   = new JButton("Save");
+    JButton cancel = new JButton("Cancel");
+    style(save, PRIMARY); style(cancel, GRAY_BTN);
+
+    save.addActionListener(e -> {
+        String dateStr    = tfDate.getText().trim();
+        String timeStr    = tfTime.getText().trim();
+        String endTimeStr = tfEndTime.getText().trim();
+        if (dateStr.isEmpty() || timeStr.isEmpty() || endTimeStr.isEmpty()) {
+            msg("Please fill all fields!"); return;
         }
 
-        JDialog dlg = new JDialog(this, "Add New Appointment", true);
-        dlg.setSize(450, 320);
-        dlg.setLocationRelativeTo(this);
-        dlg.setLayout(new BorderLayout());
+        String   appId   = "APT" + String.format("%03d", appointmentsList.size() + 1);
+        property selProp = propertiesList.get(propCombo.getSelectedIndex());
+        user     selUser = selProp.getOwner();  
 
-        JPanel form = new JPanel(new GridBagLayout());
-        form.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
-        GridBagConstraints g = new GridBagConstraints();
-        g.fill   = GridBagConstraints.HORIZONTAL;
-        g.insets = new Insets(6, 6, 6, 6);
+        time t = new time();
+        try {
+            String[] dateParts = dateStr.split("-");
+            String[] timeParts = timeStr.split(":");
+            int year  = Integer.parseInt(dateParts[0]);
+            int month = Integer.parseInt(dateParts[1]);
+            int day   = Integer.parseInt(dateParts[2]);
+            int hour  = Integer.parseInt(timeParts[0]);
+            int min   = Integer.parseInt(timeParts[1]);
+            t.setdate(hour, min, day, month, year);
+            t.setenddate(Integer.parseInt(endTimeStr));
+        } catch (Exception ex) {
+            msg("Invalid format. Use yyyy-MM-dd and HH:mm and mm"); return;
+        }
 
-        String[] userNames = customList.stream()
-            .map(user::getName).toArray(String[]::new);
-        String[] propNames = propertiesList.stream()
-            .map(property::getName).toArray(String[]::new);
+        appointment newApp = new appointment(appId, selUser, selProp, t);
+        appointmentsList.add(newApp);
+        mangfile.saveToFile(mangfile.FileType.APPOINTMENT, appointmentsList);
+        msg("Appointment added successfully!");
+        refreshDashboard();
+        dlg.dispose();
+    });
+    cancel.addActionListener(e -> dlg.dispose());
 
-        JComboBox<String> userCombo = new JComboBox<>(userNames);
-        JComboBox<String> propCombo = new JComboBox<>(propNames);
-        JTextField tfDate = new JTextField(18);
-        JTextField tfTime = new JTextField(18);
-        JTextField tfEndTime = new JTextField(18);
-        tfDate.setToolTipText("Format: yyyy-MM-dd");
-        tfTime.setToolTipText("Format: HH:mm");
-        tfEndTime.setToolTipText("Format: mm");
-
-
-        g.gridx = 0; g.gridy = 0; form.add(new JLabel("User:"),              g); g.gridx = 1; form.add(userCombo, g);
-        g.gridx = 0; g.gridy = 1; form.add(new JLabel("Property:"),          g); g.gridx = 1; form.add(propCombo, g);
-        g.gridx = 0; g.gridy = 2; form.add(new JLabel("Date (yyyy-MM-dd):"), g); g.gridx = 1; form.add(tfDate,    g);
-        g.gridx = 0; g.gridy = 3; form.add(new JLabel("Time (HH:mm):"),      g); g.gridx = 1; form.add(tfTime,    g);
-        g.gridx = 0; g.gridy = 4; form.add(new JLabel("EndTime (mm) the max 45minutes:"),      g); g.gridx = 1; form.add(tfEndTime,    g);
-        JPanel btns = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
-        JButton save   = new JButton("Save");
-        JButton cancel = new JButton("Cancel");
-        style(save, PRIMARY); style(cancel, GRAY_BTN);
-
-        save.addActionListener(e -> {
-            String dateStr = tfDate.getText().trim();
-            String timeStr = tfTime.getText().trim();
-            String endTimeStr = tfEndTime.getText().trim();
-            if (dateStr.isEmpty() || timeStr.isEmpty() || endTimeStr.isEmpty()) { msg("Please fill all fields!"); return; }
-
-            String appId     = "APT" + String.format("%03d", appointmentsList.size() + 1);
-            user     selUser = customList.get(userCombo.getSelectedIndex());
-            property selProp = propertiesList.get(propCombo.getSelectedIndex());
-
-            time t = new time();
-            try {
-                String[] dateParts = dateStr.split("-");
-                String[] timeParts = timeStr.split(":");
-                int year  = Integer.parseInt(dateParts[0]);
-                int month = Integer.parseInt(dateParts[1]);
-                int day   = Integer.parseInt(dateParts[2]);
-                int hour  = Integer.parseInt(timeParts[0]);
-                int min   = Integer.parseInt(timeParts[1]);
-                t.setdate(hour, min, day, month, year);
-                t.setenddate(Integer.parseInt(endTimeStr));
-            } catch (Exception ex) {
-                msg("Invalid format. Use yyyy-MM-dd and HH:mm and mm"); return;
-            }
-
-            appointment newApp = new appointment(appId, selUser, selProp, t);
-            appointmentsList.add(newApp);
-            mangfile.saveToFile(mangfile.FileType.APPOINTMENT, appointmentsList);
-            msg("Appointment added successfully!");
-            refreshDashboard();
-            dlg.dispose();
-        });
-        cancel.addActionListener(e -> dlg.dispose());
-
-        btns.add(save); btns.add(cancel);
-        dlg.add(form, BorderLayout.CENTER);
-        dlg.add(btns, BorderLayout.SOUTH);
-        dlg.setVisible(true);
-    }
+    btns.add(save); btns.add(cancel);
+    dlg.add(form, BorderLayout.CENTER);
+    dlg.add(btns, BorderLayout.SOUTH);
+    dlg.setVisible(true);
+}
 
     // ================================================================
     //  ADD PROPERTY DIALOG
