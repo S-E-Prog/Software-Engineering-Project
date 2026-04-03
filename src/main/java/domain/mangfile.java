@@ -9,11 +9,12 @@ public class mangfile {
   
     CUSTOMER("src/main/java/resources/customerslist.dat"),
     PROPERTY("src/main/java/resources/propertieslist.dat"),
-    APPOINTMENT("src/main/java/resources/appointmentslist.dat");
+    APPOINTMENT("src/main/java/resources/appointmentslist.dat"),
+    BOOKING("src/main/java/resources/bookingslist.dat");
 
     private final String path;
 
-    // "Constructor" للـ Enum لتحديد المسار لكل نوع
+
     FileType(String path) {
         this.path = path;
     }

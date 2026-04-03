@@ -24,10 +24,12 @@ class InnerGUI extends JFrame implements ActionListener {
     ArrayList<user>        customList       = new ArrayList<>();
     ArrayList<property>    propertiesList   = new ArrayList<>();
     ArrayList<appointment> appointmentsList = new ArrayList<>();
+    ArrayList<String[]> bookingsList = new ArrayList<>();
 
     // --- Login fields ---
     JTextField     emailField;
     JPasswordField passField;
+    JLabel welcomeLabel = new JLabel("Welcome!", SwingConstants.CENTER);
 
     // --- Register fields ---
     JTextField     nameField, emailRegField;
@@ -41,6 +43,26 @@ class InnerGUI extends JFrame implements ActionListener {
     JTextField        searchField;
     JTextField        propSearchField;
     JTextField        apptSearchField;
+
+    // --- Current logged-in user ---
+    user currentUser = null;
+
+
+    // --- User panel table models ---
+    DefaultTableModel availableApptModel;
+    DefaultTableModel myApptModel;       
+    DefaultTableModel myBookedModel;    
+    DefaultTableModel myPropsModel;
+    JTable            availableApptTable;
+    JTable            myApptTable;
+    JTable            myBookedTable;
+    JTable            myPropsTable;
+
+    // --- User panel search fields ---
+    JTextField availableApptSearchField;
+    JTextField myApptSearchField;
+    JTextField myBookedSearchField;
+    JTextField myPropSearchField;
 
     // --- Color palette ---
     final Color PRIMARY  = new Color(34,  139,  34);
@@ -67,15 +89,23 @@ class InnerGUI extends JFrame implements ActionListener {
         mainPanel.add(buildLoginPanel(),    "login");
         mainPanel.add(buildRegisterPanel(), "register");
         mainPanel.add(buildAdminPanel(),    "admin");
+        mainPanel.add(buildUserPanel(),     "user");
 
         add(mainPanel);
     }
 
     /** Centralised data-load so we can call it from anywhere. */
+    @SuppressWarnings("unchecked")
     private void loadData() {
         customList       = mangfile.loadFromFile(mangfile.FileType.CUSTOMER);
         propertiesList   = mangfile.loadFromFile(mangfile.FileType.PROPERTY);
         appointmentsList = mangfile.loadFromFile(mangfile.FileType.APPOINTMENT);
+       bookingsList = mangfile.loadFromFile(mangfile.FileType.BOOKING);
+
+    }
+
+    private void saveBookings() {
+        mangfile.saveToFile(mangfile.FileType.BOOKING, bookingsList);
     }
 
     // ================================================================
@@ -91,7 +121,7 @@ class InnerGUI extends JFrame implements ActionListener {
         btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
     }
 
-    /** Styles JTextField and JPasswordField via their shared supertype. */
+    /* Styles JTextField and JPasswordField via their shared supertype. */
     private void styleField(JComponent f) {
         f.setBorder(BorderFactory.createCompoundBorder(
             BorderFactory.createLineBorder(Color.GRAY),
@@ -174,7 +204,7 @@ class InnerGUI extends JFrame implements ActionListener {
         emailRegField = new JTextField();
         passRegField  = new JPasswordField();
 
-        // Fix: style each field individually to avoid illegal cast
+       
         for (JComponent f : new JComponent[]{nameField, emailRegField, passRegField}) {
             f.setMaximumSize(new Dimension(Integer.MAX_VALUE, 35));
             styleField(f);
@@ -338,7 +368,7 @@ class InnerGUI extends JFrame implements ActionListener {
         lbl.setFont(new Font("Arial", Font.BOLD, 16));
         p.add(lbl, BorderLayout.NORTH);
 
-        DefaultTableModel m = new DefaultTableModel(new String[]{"ID", "User", "Property", "Date", "Status"}, 0);
+        DefaultTableModel m = new DefaultTableModel(new String[]{"ID", "User", "Property", "Date","Available seats", "Status"}, 0);
         int count = 0;
         for (int i = appointmentsList.size() - 1; i >= 0 && count < 5; i--) {
             appointment a = appointmentsList.get(i);
@@ -347,6 +377,7 @@ class InnerGUI extends JFrame implements ActionListener {
                 a.getBookedBy().getName(),
                 a.getProperty().getName(),
                 a.getAppointmentTime(),
+                a.getProperty().getMaxViewingCapacity() - countBookings(a.getAppointmentId()),
                 a.getStatus()
             });
             count++;
@@ -429,7 +460,7 @@ private void showAddAppointmentDialog() {
     }
 
     JDialog dlg = new JDialog(this, "Add New Appointment", true);
-    dlg.setSize(450, 320);
+    dlg.setSize(455, 325);
     dlg.setLocationRelativeTo(this);
     dlg.setLayout(new BorderLayout());
 
@@ -451,9 +482,9 @@ private void showAddAppointmentDialog() {
         ownerLabel.setText(owners[idx] != null ? owners[idx].getName() : "N/A");
     });
 
-    JTextField tfDate    = new JTextField(18);
-    JTextField tfTime    = new JTextField(18);
-    JTextField tfEndTime = new JTextField(18);
+    JTextField tfDate    = new JTextField(20);
+    JTextField tfTime    = new JTextField(20);
+    JTextField tfEndTime = new JTextField(20);
     tfDate.setToolTipText("Format: yyyy-MM-dd");
     tfTime.setToolTipText("Format: HH:mm");
     tfEndTime.setToolTipText("Format: mm");
@@ -462,7 +493,7 @@ private void showAddAppointmentDialog() {
     g.gridx = 0; g.gridy = 1; form.add(new JLabel("Owner:"),                          g); g.gridx = 1; form.add(ownerLabel, g);
     g.gridx = 0; g.gridy = 2; form.add(new JLabel("Date (yyyy-MM-dd):"),              g); g.gridx = 1; form.add(tfDate,     g);
     g.gridx = 0; g.gridy = 3; form.add(new JLabel("Time (HH:mm):"),                   g); g.gridx = 1; form.add(tfTime,     g);
-    g.gridx = 0; g.gridy = 4; form.add(new JLabel("EndTime (mm) the max 45minutes:"), g); g.gridx = 1; form.add(tfEndTime,  g);
+    g.gridx = 0; g.gridy = 4; form.add(new JLabel("EndTime max 45min(mm):"), g); g.gridx = 1; form.add(tfEndTime,  g);
 
     JPanel btns = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
     JButton save   = new JButton("Save");
@@ -475,7 +506,10 @@ private void showAddAppointmentDialog() {
         String endTimeStr = tfEndTime.getText().trim();
         if (dateStr.isEmpty() || timeStr.isEmpty() || endTimeStr.isEmpty()) {
             msg("Please fill all fields!"); return;
+        }else if(Integer.parseInt(endTimeStr)>45){
+            msg("End time must be 45 minutes or less!"); return;
         }
+        
 
         String   appId   = "APT" + String.format("%03d", appointmentsList.size() + 1);
         property selProp = propertiesList.get(propCombo.getSelectedIndex());
@@ -536,8 +570,8 @@ private void showAddAppointmentDialog() {
         JTextField tfPrice = new JTextField(18);
         JTextField tfCap   = new JTextField(18);
 
-        String[]    labels = {"Name:", "Address:", "Description:", "Price:", "Capacity:"};
-        JTextField[] fields = {tfName, tfAddr, tfDesc, tfPrice, tfCap};
+        String[]    labels = {"Name:", "Address:", "Price:", "Capacity:"};
+        JTextField[] fields = {tfName, tfAddr, tfPrice, tfCap};
 
         for (int i = 0; i < fields.length; i++) {
             g.gridx = 0; g.gridy = i; form.add(new JLabel(labels[i]), g);
@@ -570,8 +604,7 @@ private void showAddAppointmentDialog() {
                 propertiesList.add(new property(
                     newId,
                     tfName.getText().trim(),
-                    tfAddr.getText().trim(),
-                    tfDesc.getText().trim(),
+                    tfAddr.getText().trim(),              
                     price, cap, owner
                 ));
                 mangfile.saveToFile(mangfile.FileType.PROPERTY, propertiesList);
@@ -763,6 +796,7 @@ private void showAddAppointmentDialog() {
         apptSearchField.addKeyListener(new KeyAdapter() {
             @Override public void keyReleased(KeyEvent e) { filterAppointments(apptSearchField.getText()); }
         });
+        
         top.add(apptSearchField);
         top.add(new JLabel("Filter:"));
         statusFilter = new JComboBox<>(new String[]{"ALL", "CONFIRMED", "CANCELLED", "COMPLETED"});
@@ -804,6 +838,7 @@ private void showAddAppointmentDialog() {
         String filter = (String) statusFilter.getSelectedItem();
         for (appointment a : appointmentsList) {
             if (!"ALL".equals(filter) && !a.getStatus().toString().equals(filter)) continue;
+             int slotsLeft = a.getProperty().getMaxViewingCapacity() - countBookings(a.getAppointmentId());
             appointmentsModel.addRow(new Object[]{
                 a.getAppointmentId(),
                 a.getBookedBy().getName(),
@@ -847,6 +882,641 @@ private void showAddAppointmentDialog() {
     }
 
     // ================================================================
+    //  USER PANEL
+    // ================================================================
+    private JPanel buildUserPanel() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBackground(BG);
+
+       
+        JPanel header = new JPanel(new BorderLayout());
+        header.setBackground(BLUE);
+        header.setBorder(BorderFactory.createEmptyBorder(15, 20, 15, 20));
+        welcomeLabel.setFont(new Font("Arial", Font.BOLD, 20));
+        welcomeLabel.setForeground(Color.WHITE);
+        header.add(welcomeLabel, BorderLayout.CENTER);
+        JButton logoutBtn = new JButton("Logout");
+        style(logoutBtn, RED);
+        logoutBtn.addActionListener(e -> {
+            if (confirm("Logout?")) {
+                currentUser = null;
+                cardLayout.show(mainPanel, "login");
+            }
+        });
+        header.add(logoutBtn, BorderLayout.EAST);
+
+        JTabbedPane tabs = new JTabbedPane();
+        tabs.addTab("Available Appointments", buildAvailableApptTab());
+        tabs.addTab("My Appointments",        buildMyApptTab());
+        tabs.addTab("My Booked Appointments", buildMybookedTab());
+        tabs.addTab("My Properties",          buildMyPropsTab());
+
+        panel.add(header, BorderLayout.NORTH);
+        panel.add(tabs,   BorderLayout.CENTER);
+        return panel;
+    }
+
+    private JPanel buildAvailableApptTab() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        top.add(new JLabel("Search:"));
+        availableApptSearchField = new JTextField(15);
+        availableApptSearchField.addKeyListener(new KeyAdapter() {
+            @Override public void keyReleased(KeyEvent e) { filterAvailableAppts(availableApptSearchField.getText()); }
+        });
+        top.add(availableApptSearchField);
+        JButton bookBtn = new JButton("Book Selected");
+        style(bookBtn, PRIMARY);
+        bookBtn.addActionListener(e -> bookAppointment());
+        top.add(bookBtn);
+
+        JButton refBtn = new JButton("Refresh");
+        style(refBtn, GRAY_BTN);
+        refBtn.addActionListener(e -> { refreshAvailableAppts(); availableApptSearchField.setText(""); });
+        top.add(refBtn);
+
+        availableApptModel = new DefaultTableModel(
+            new String[]{"ID", "Property", "Owner", "Date & Time", "Available seats"}, 0) {
+            @Override public boolean isCellEditable(int r, int c) { return false; }
+        };
+        
+        availableApptTable = new JTable(availableApptModel);
+        availableApptTable.setRowHeight(30);
+        availableApptTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        refreshAvailableAppts();
+
+        panel.add(top, BorderLayout.NORTH);
+        panel.add(new JScrollPane(availableApptTable), BorderLayout.CENTER);
+        return panel;
+    }
+
+
+    private JPanel buildMyApptTab() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        top.add(new JLabel("Search:"));
+        myApptSearchField = new JTextField(15);
+        myApptSearchField.addKeyListener(new KeyAdapter() {
+            @Override public void keyReleased(KeyEvent e) { filterMyAppts(myApptSearchField.getText()); }
+        });
+        top.add(myApptSearchField);
+
+        JButton addApptBtn = new JButton("Add Appointment on My Property");
+        style(addApptBtn, BLUE);
+        addApptBtn.addActionListener(e -> showUserAddAppointmentDialog());
+        top.add(addApptBtn);
+
+        JButton delBtn = new JButton("Delete Selected");
+        style(delBtn, RED);
+        delBtn.addActionListener(e -> deleteMyAppointment());
+        top.add(delBtn);
+
+        JButton refBtn = new JButton("Refresh");
+        style(refBtn, GRAY_BTN);
+        refBtn.addActionListener(e -> { refreshMyAppts(); myApptSearchField.setText(""); });
+        top.add(refBtn);
+
+        myApptModel = new DefaultTableModel(
+            new String[]{"ID", "Property", "Date & Time", "Status"}, 0) {
+            @Override public boolean isCellEditable(int r, int c) { return false; }
+        };
+        myApptTable = new JTable(myApptModel);
+        myApptTable.setRowHeight(30);
+        myApptTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+
+        panel.add(top, BorderLayout.NORTH);
+        panel.add(new JScrollPane(myApptTable), BorderLayout.CENTER);
+        return panel;
+    }
+
+
+    private JPanel buildMyPropsTab() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        top.add(new JLabel("Search:"));
+        myPropSearchField = new JTextField(20);
+        myPropSearchField.addKeyListener(new KeyAdapter() {
+            @Override public void keyReleased(KeyEvent e) { filterMyProps(myPropSearchField.getText()); }
+        });
+        top.add(myPropSearchField);
+
+        JButton addPropBtn = new JButton("Add Property");
+        style(addPropBtn, PRIMARY);
+        addPropBtn.addActionListener(e -> showUserAddPropertyDialog());
+        top.add(addPropBtn);
+
+        JButton delBtn = new JButton("Delete Selected");
+        style(delBtn, RED);
+        delBtn.addActionListener(e -> deleteMyProperty());
+        top.add(delBtn);
+
+        JButton refBtn = new JButton("Refresh");
+        style(refBtn, GRAY_BTN);
+        refBtn.addActionListener(e -> { refreshMyProps(); myPropSearchField.setText(""); });
+        top.add(refBtn);
+
+        myPropsModel = new DefaultTableModel(
+            new String[]{"ID", "Name", "Address", "Price", "Capacity"}, 0) {
+            @Override public boolean isCellEditable(int r, int c) { return false; }
+        };
+        myPropsTable = new JTable(myPropsModel);
+        myPropsTable.setRowHeight(30);
+        myPropsTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+
+        panel.add(top, BorderLayout.NORTH);
+        panel.add(new JScrollPane(myPropsTable), BorderLayout.CENTER);
+        return panel;
+    }
+
+    private JPanel buildMybookedTab() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        top.add(new JLabel("Search:"));
+        myBookedSearchField = new JTextField(15);
+        myBookedSearchField.addKeyListener(new KeyAdapter() {
+            @Override public void keyReleased(KeyEvent e) { filterMyBooked(myBookedSearchField.getText()); }
+        });
+        top.add(myBookedSearchField);
+
+        JButton cancelBtn = new JButton("Cancel Booking");
+        style(cancelBtn, RED);
+        cancelBtn.addActionListener(e -> cancelMyBooking());
+        top.add(cancelBtn);
+
+        JButton refBtn = new JButton("Refresh");
+        style(refBtn, GRAY_BTN);
+        refBtn.addActionListener(e -> { refreshMyBooked(); myBookedSearchField.setText(""); });
+        top.add(refBtn);
+
+        myBookedModel = new DefaultTableModel(
+            new String[]{"ID", "Property", "Date & Time", "Status"}, 0) {
+            @Override public boolean isCellEditable(int r, int c) { return false; }
+        };
+        myBookedTable = new JTable(myBookedModel);
+        myBookedTable.setRowHeight(30);
+        myBookedTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+
+        panel.add(top, BorderLayout.NORTH);
+        panel.add(new JScrollPane(myBookedTable), BorderLayout.CENTER);
+        return panel;
+    }
+ 
+    // ================================================================
+    //  USER PANEL — REFRESH METHODS
+    // ================================================================
+    private void refreshAvailableAppts() {
+        availableApptModel.setRowCount(0);
+        loadData();
+        checkAndUpdateAppointmentStatuses();
+        for (appointment a : appointmentsList) {
+            if (a.getStatus() != appointment.AppointmentStatus.AVAILABLE) continue;
+        
+            if (currentUser != null && a.getBookedBy() != null
+                    && a.getBookedBy().getId().equals(currentUser.getId())) continue;
+            int slotsLeft = a.getProperty().getMaxViewingCapacity() - countBookings(a.getAppointmentId());
+            availableApptModel.addRow(new Object[]{
+                a.getAppointmentId(),
+                a.getProperty().getName(),
+                a.getBookedBy() != null ? a.getBookedBy().getName() : "N/A",
+                a.getAppointmentTime(),
+                slotsLeft
+            });
+        }
+    }
+
+    private void refreshMyAppts() {
+        myApptModel.setRowCount(0);
+        if (currentUser == null) return;
+        loadData();
+     
+        for (appointment a : appointmentsList) {
+            if (a.getProperty().getOwner() != null
+                    && a.getProperty().getOwner().getId().equals(currentUser.getId())) {
+                myApptModel.addRow(new Object[]{
+                    a.getAppointmentId(),
+                    a.getProperty().getName(),
+                    a.getAppointmentTime(),
+                    a.getStatus()
+                });
+            }
+        }
+    }
+
+    private void refreshMyBooked() {
+        myBookedModel.setRowCount(0);
+        if (currentUser == null) return;
+        loadData();
+        for (String[] b : bookingsList) {
+            if (!b[0].equals(currentUser.getId())) continue;
+            for (appointment a : appointmentsList) {
+                if (!a.getAppointmentId().equals(b[1])) continue;
+                myBookedModel.addRow(new Object[]{
+                    a.getAppointmentId(),
+                    a.getProperty().getName(),
+                    a.getAppointmentTime(),
+                    a.getStatus()
+                });
+                break;
+            }
+        }
+    }
+
+    private void refreshMyProps() {
+        myPropsModel.setRowCount(0);
+        if (currentUser == null) return;
+        loadData();
+        for (property p : propertiesList) {
+            if (p.getOwner() != null && p.getOwner().getId().equals(currentUser.getId())) {
+                myPropsModel.addRow(new Object[]{
+                    p.getPropertyId(), p.getName(), p.getAddress(),
+                    "$" + String.format("%,.0f", p.getPrice()),
+                    p.getMaxViewingCapacity()
+                });
+            }
+        }
+    }
+
+    private int countBookings(String apptId) {
+        int count = 0;
+        for (String[] b : bookingsList)
+            if (b[1].equals(apptId)) count++;
+        return count;
+    }
+
+    // ================================================================
+    //  USER PANEL — ACTIONS
+    // ================================================================
+
+    private void bookAppointment() {
+        int row = availableApptTable.getSelectedRow();
+        if (row < 0) { msg("Please select an appointment to book."); return; }
+        String id = (String) availableApptModel.getValueAt(row, 0);
+
+      
+        for (String[] b : bookingsList)
+            if (b[0].equals(currentUser.getId()) && b[1].equals(id)) {
+                msg("You already booked this appointment!"); return;
+            }
+
+        for (appointment a : appointmentsList) {
+            if (!a.getAppointmentId().equals(id)) continue;
+            if (a.getStatus() != appointment.AppointmentStatus.AVAILABLE) {
+                msg("This appointment is no longer available."); return;
+            }
+            int cap      = a.getProperty().getMaxViewingCapacity();
+            int bookings = countBookings(id);
+            if (bookings >= cap) {
+                msg("This appointment is fully booked!"); return;
+            }
+            if (confirm("Book this appointment?")) {
+               
+                bookingsList.add(new String[]{currentUser.getId(), id});
+                saveBookings();
+           
+                if (countBookings(id) >= cap) {
+                    a.confirm();
+                    mangfile.saveToFile(mangfile.FileType.APPOINTMENT, appointmentsList);
+                }
+                msg("Appointment booked successfully!");
+                refreshAvailableAppts();
+                refreshMyBooked();
+            }
+            return;
+        }
+    }
+
+    private void cancelMyBooking() {
+        int row = myBookedTable.getSelectedRow();
+        if (row < 0) { msg("Please select an appointment to cancel."); return; }
+        String id = (String) myBookedModel.getValueAt(row, 0);
+
+        for (appointment a : appointmentsList) {
+            if (!a.getAppointmentId().equals(id)) continue;
+            if (a.getStatus() == appointment.AppointmentStatus.COMPLETED
+                    || a.getStatus() == appointment.AppointmentStatus.CANCELLED) {
+                msg("Cannot cancel a completed or already cancelled appointment."); return;
+            }
+            if (confirm("Cancel this booking? It will become available again.")) {
+               
+                bookingsList.removeIf(b -> b[0].equals(currentUser.getId()) && b[1].equals(id));
+                saveBookings();
+                if (countBookings(id) == 0) {
+                    a.setStatus(appointment.AppointmentStatus.AVAILABLE);
+                    mangfile.saveToFile(mangfile.FileType.APPOINTMENT, appointmentsList);
+                }
+                msg("Booking cancelled. Appointment is now available.");
+                refreshMyBooked();
+                refreshAvailableAppts();
+            }
+            return;
+        }
+    }
+
+    private void checkAndUpdateAppointmentStatuses() {
+        boolean changed = false;
+        for (appointment a : appointmentsList) {
+            if (a.getStatus() == appointment.AppointmentStatus.CANCELLED
+                    || a.getStatus() == appointment.AppointmentStatus.COMPLETED) continue;
+
+          
+            if (a.getStatus() == appointment.AppointmentStatus.CONFIRMED && a.isExpired()) {
+                a.complete();
+                changed = true;
+            }
+
+         
+            if (a.getStatus() == appointment.AppointmentStatus.AVAILABLE && a.isExpired()) {
+                a.complete();
+                changed = true;
+                continue;
+            }
+
+            int cap = a.getProperty().getMaxViewingCapacity();
+            if (a.getStatus() == appointment.AppointmentStatus.AVAILABLE
+                    && countBookings(a.getAppointmentId()) >= cap) {
+                a.confirm();
+                changed = true;
+            }
+        }
+        if (changed) mangfile.saveToFile(mangfile.FileType.APPOINTMENT, appointmentsList);
+    }
+
+    private void startStatusChecker() {
+        Thread checker = new Thread(() -> {
+            while (currentUser != null) {
+                try { Thread.sleep(60000); } catch (InterruptedException ex) { break; }
+                SwingUtilities.invokeLater(() -> {
+                    if (currentUser == null) return;
+                    loadData();
+                    checkAndUpdateAppointmentStatuses();
+                    if (availableApptModel != null) refreshAvailableAppts();
+                    if (myApptModel       != null) refreshMyAppts();
+                    if (myBookedModel     != null) refreshMyBooked();
+                });
+            }
+        });
+        checker.setDaemon(true);
+        checker.start();
+    }
+
+    // ================================================================
+    //  USER PANEL — FILTER METHODS
+    // ================================================================
+    private void filterAvailableAppts(String kw) {
+        availableApptModel.setRowCount(0);
+        String lower = kw.toLowerCase();
+        for (appointment a : appointmentsList) {
+            if (a.getStatus() != appointment.AppointmentStatus.AVAILABLE) continue;
+            if (currentUser != null && a.getBookedBy() != null
+                    && a.getBookedBy().getId().equals(currentUser.getId())) continue;
+            if (!kw.isEmpty()
+                    && !a.getProperty().getName().toLowerCase().contains(lower)
+                    && !a.getAppointmentId().toLowerCase().contains(lower)
+                    && !(a.getBookedBy() != null && a.getBookedBy().getName().toLowerCase().contains(lower))) continue;
+            int slotsLeft = a.getProperty().getMaxViewingCapacity() - countBookings(a.getAppointmentId());
+            availableApptModel.addRow(new Object[]{
+                a.getAppointmentId(),
+                a.getProperty().getName(),
+                a.getBookedBy() != null ? a.getBookedBy().getName() : "N/A",
+                a.getAppointmentTime(),
+                slotsLeft
+            });
+        }
+    }
+
+    private void filterMyAppts(String kw) {
+        myApptModel.setRowCount(0);
+        if (currentUser == null) return;
+        String lower = kw.toLowerCase();
+        for (appointment a : appointmentsList) {
+            if (a.getProperty().getOwner() == null
+                    || !a.getProperty().getOwner().getId().equals(currentUser.getId())) continue;
+            if (!kw.isEmpty()
+                    && !a.getProperty().getName().toLowerCase().contains(lower)
+                    && !a.getAppointmentId().toLowerCase().contains(lower)) continue;
+            myApptModel.addRow(new Object[]{
+                a.getAppointmentId(), a.getProperty().getName(), a.getAppointmentTime(), a.getStatus()
+            });
+        }
+    }
+
+    private void filterMyBooked(String kw) {
+        myBookedModel.setRowCount(0);
+        if (currentUser == null) return;
+        String lower = kw.toLowerCase();
+        for (String[] b : bookingsList) {
+            if (!b[0].equals(currentUser.getId())) continue;
+            for (appointment a : appointmentsList) {
+                if (!a.getAppointmentId().equals(b[1])) continue;
+                if (!kw.isEmpty()
+                        && !a.getProperty().getName().toLowerCase().contains(lower)
+                        && !a.getAppointmentId().toLowerCase().contains(lower)) break;
+                myBookedModel.addRow(new Object[]{
+                    a.getAppointmentId(), a.getProperty().getName(), a.getAppointmentTime(), a.getStatus()
+                });
+                break;
+            }
+        }
+    }
+
+    private void filterMyProps(String kw) {
+        myPropsModel.setRowCount(0);
+        if (currentUser == null) return;
+        String lower = kw.toLowerCase();
+        for (property p : propertiesList) {
+            if (p.getOwner() == null || !p.getOwner().getId().equals(currentUser.getId())) continue;
+            if (!kw.isEmpty()
+                    && !p.getName().toLowerCase().contains(lower)
+                    && !p.getAddress().toLowerCase().contains(lower)) continue;
+            myPropsModel.addRow(new Object[]{
+                p.getPropertyId(), p.getName(), p.getAddress(),
+                "$" + String.format("%,.0f", p.getPrice()), p.getMaxViewingCapacity()
+            });
+        }
+    }
+
+   
+    private void deleteMyAppointment() {
+        int row = myApptTable.getSelectedRow();
+        if (row < 0) { msg("Please select an appointment first."); return; }
+        String id = (String) myApptModel.getValueAt(row, 0);
+        // Only allow deletion if appointment is AVAILABLE (not yet booked)
+        for (appointment a : appointmentsList) {
+            if (!a.getAppointmentId().equals(id)) continue;
+            if (a.getStatus() == appointment.AppointmentStatus.CONFIRMED) {
+                msg("Cannot delete a confirmed appointment. Cancel it first."); return;
+            }
+            break;
+        }
+        if (confirm("Delete this appointment?")) {
+            appointmentsList.removeIf(a -> a.getAppointmentId().equals(id));
+            mangfile.saveToFile(mangfile.FileType.APPOINTMENT, appointmentsList);
+            refreshMyAppts();
+            refreshAvailableAppts();
+            msg("Appointment deleted.");
+        }
+    }
+
+  
+    private void deleteMyProperty() {
+        int row = myPropsTable.getSelectedRow();
+        if (row < 0) { msg("Please select a property first."); return; }
+        String id = (String) myPropsModel.getValueAt(row, 0);
+        if (confirm("Delete this property?")) {
+            propertiesList.removeIf(p -> p.getPropertyId().equals(id));
+            mangfile.saveToFile(mangfile.FileType.PROPERTY, propertiesList);
+            refreshMyProps();
+            msg("Property deleted.");
+        }
+    }
+
+    // ================================================================
+    //  USER PANEL — ADD APPOINTMENT DIALOG
+    // ================================================================
+    private void showUserAddAppointmentDialog() {
+        if (currentUser == null) return;
+        loadData();
+
+        ArrayList<property> myProps = new ArrayList<>();
+        for (property p : propertiesList)
+            if (p.getOwner() != null && p.getOwner().getId().equals(currentUser.getId()))
+                myProps.add(p);
+
+        if (myProps.isEmpty()) {
+            msg("You don't own any properties. Add a property first!"); return;
+        }
+
+        JDialog dlg = new JDialog(this, "Add Appointment on My Property", true);
+        dlg.setSize(450, 300);
+        dlg.setLocationRelativeTo(this);
+        dlg.setLayout(new BorderLayout());
+
+        JPanel form = new JPanel(new GridBagLayout());
+        form.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+        GridBagConstraints g = new GridBagConstraints();
+        g.fill = GridBagConstraints.HORIZONTAL;
+        g.insets = new Insets(6, 6, 6, 6);
+
+        String[] propNames = myProps.stream().map(property::getName).toArray(String[]::new);
+        JComboBox<String> propCombo = new JComboBox<>(propNames);
+        JTextField tfDate    = new JTextField(18);
+        JTextField tfTime    = new JTextField(18);
+        JTextField tfEndTime = new JTextField(18);
+        tfDate.setToolTipText("Format: yyyy-MM-dd");
+        tfTime.setToolTipText("Format: HH:mm");
+        tfEndTime.setToolTipText("Minutes (max 45)");
+
+        g.gridx = 0; g.gridy = 0; form.add(new JLabel("Property:"),          g); g.gridx = 1; form.add(propCombo, g);
+        g.gridx = 0; g.gridy = 1; form.add(new JLabel("Date (yyyy-MM-dd):"), g); g.gridx = 1; form.add(tfDate,    g);
+        g.gridx = 0; g.gridy = 2; form.add(new JLabel("Time (HH:mm):"),      g); g.gridx = 1; form.add(tfTime,    g);
+        g.gridx = 0; g.gridy = 3; form.add(new JLabel("EndTime max 45min(mm):"), g); g.gridx = 1; form.add(tfEndTime, g);
+
+        JPanel btns = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
+        JButton save = new JButton("Save"); JButton cancel = new JButton("Cancel");
+        style(save, PRIMARY); style(cancel, GRAY_BTN);
+
+        save.addActionListener(e -> {
+            String dateStr = tfDate.getText().trim();
+            String timeStr = tfTime.getText().trim();
+            String endStr  = tfEndTime.getText().trim();
+            if (dateStr.isEmpty() || timeStr.isEmpty() || endStr.isEmpty()) {
+                msg("Please fill all fields!"); return;
+            }else if(Integer.parseInt(endStr)>45){
+                msg("End time must be 45 minutes or less!"); return;
+            }
+            try {
+                property selProp = myProps.get(propCombo.getSelectedIndex());
+                String appId = "APT" + String.format("%03d", appointmentsList.size() + 1);
+                String[] dp = dateStr.split("-"); String[] tp = timeStr.split(":");
+                time t = new time();
+                t.setdate(Integer.parseInt(tp[0]), Integer.parseInt(tp[1]),
+                          Integer.parseInt(dp[2]), Integer.parseInt(dp[1]), Integer.parseInt(dp[0]));
+                t.setenddate(Integer.parseInt(endStr));
+                appointment newApp = new appointment(appId, currentUser, selProp, t);
+                newApp.setStatus(appointment.AppointmentStatus.AVAILABLE);
+                appointmentsList.add(newApp);
+                mangfile.saveToFile(mangfile.FileType.APPOINTMENT, appointmentsList);
+                msg("Appointment added and is now available for booking!");
+                refreshAvailableAppts();
+                dlg.dispose();
+            } catch (Exception ex) {
+                msg("Invalid format. Use yyyy-MM-dd and HH:mm");
+            }
+        });
+        cancel.addActionListener(e -> dlg.dispose());
+        btns.add(save); btns.add(cancel);
+        dlg.add(form, BorderLayout.CENTER);
+        dlg.add(btns, BorderLayout.SOUTH);
+        dlg.setVisible(true);
+    }
+
+    // ================================================================
+    //  USER PANEL — ADD PROPERTY DIALOG
+    // ================================================================
+    private void showUserAddPropertyDialog() {
+        if (currentUser == null) return;
+
+        JDialog dlg = new JDialog(this, "Add My Property", true);
+        dlg.setSize(400, 320);
+        dlg.setLocationRelativeTo(this);
+        dlg.setLayout(new BorderLayout());
+
+        JPanel form = new JPanel(new GridBagLayout());
+        form.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+        GridBagConstraints g = new GridBagConstraints();
+        g.fill = GridBagConstraints.HORIZONTAL;
+        g.insets = new Insets(6, 6, 6, 6);
+
+        JTextField tfName  = new JTextField(18);
+        JTextField tfAddr  = new JTextField(18);
+        JTextField tfPrice = new JTextField(18);
+        JTextField tfCap   = new JTextField(18);
+
+        String[] labels = {"Name:", "Address:","Price:", "Capacity:"};
+        JTextField[] fields = {tfName, tfAddr,tfPrice, tfCap};
+        for (int i = 0; i < fields.length; i++) {
+            g.gridx = 0; g.gridy = i; form.add(new JLabel(labels[i]), g);
+            g.gridx = 1;              form.add(fields[i], g);
+        }
+
+        JPanel btns = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
+        JButton save = new JButton("Save"); JButton cancel = new JButton("Cancel");
+        style(save, PRIMARY); style(cancel, GRAY_BTN);
+
+        save.addActionListener(e -> {
+            if (tfName.getText().trim().isEmpty() || tfAddr.getText().trim().isEmpty()) {
+                msg("Name and Address are required!"); return;
+            }
+            try {
+                double price = Double.parseDouble(tfPrice.getText().trim());
+                int    cap   = Integer.parseInt(tfCap.getText().trim());
+                String newId = "P" + String.format("%03d", propertiesList.size() + 1);
+                propertiesList.add(new property(newId,
+                    tfName.getText().trim(), tfAddr.getText().trim(), price, cap, currentUser));
+                mangfile.saveToFile(mangfile.FileType.PROPERTY, propertiesList);
+                msg("Property added successfully!");
+                refreshMyProps();
+                dlg.dispose();
+            } catch (NumberFormatException ex) {
+                msg("Price must be a number and Capacity must be a whole number.");
+            }
+        });
+        cancel.addActionListener(e -> dlg.dispose());
+        btns.add(save); btns.add(cancel);
+        dlg.add(form, BorderLayout.CENTER);
+        dlg.add(btns, BorderLayout.SOUTH);
+        dlg.setVisible(true);
+    }
+
+    // ================================================================
     //  UTILITY
     // ================================================================
     private void msg(String text) {
@@ -880,7 +1550,16 @@ private void showAddAppointmentDialog() {
                 boolean found = false;
                 for (user u : customList)
                     if ((u.getName().equalsIgnoreCase(email) || u.getEmail().equalsIgnoreCase(email)) && u.getPassword().equals(pass)) {
-                        msg("Welcome, " + u.getName() + "!");
+                        currentUser = u;
+                        welcomeLabel.setText("Welcome, " + u.getName() + "!");
+                        emailField.setText("");
+                        passField.setText("");
+                        refreshAvailableAppts();
+                        refreshMyAppts();
+                        refreshMyBooked();
+                        refreshMyProps();
+                        startStatusChecker();
+                        cardLayout.show(mainPanel, "user");
                         found = true; break;
                     }
                 if (!found) msg("Invalid credentials!");
@@ -900,7 +1579,7 @@ private void showAddAppointmentDialog() {
                 if (regPass.length() < 4) {
                     msg("Password must be at least 4 characters!"); break;
                 }
-                // Reload before checking size to get an accurate count
+                
                 loadData();
                 for (user u : customList) {
                     if (u.getName().equalsIgnoreCase(name)) {

@@ -7,17 +7,16 @@ public class property implements Serializable {
 	private final String propertyId;
 	private String name;
 	private String address;
-	private String description;
 	private double price;
 	private int maxParticipants;
 	private user owner;
 
-	public property(String propertyId, String name, String address, String description, double price, int maxViewingCapacity, user owner) {
+	public property(String propertyId, String name, String address , double price, int maxViewingCapacity, user owner) {
 		super();
 		this.propertyId = propertyId;
 		this.name = name;
 		this.address = address;
-		this.description = description;
+
 		this.price = price;
 		this.maxParticipants = maxViewingCapacity;
 		this.owner = owner;
@@ -47,13 +46,6 @@ public class property implements Serializable {
 		this.name = name;
 	}
 
-	public String getDescription() {
-		return description;
-	}
-
-	public void setDescription(String description) {
-		this.description = description;
-	}
 
 	public double getPrice() {
 		return price;

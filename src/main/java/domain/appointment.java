@@ -42,7 +42,12 @@ public class appointment implements Serializable {
 	}
 
 	public boolean isConfirmed() {
-		return status == AppointmentStatus.CONFIRMED && appointmentTime.isstart() && !appointmentTime.isend();
+		return status == AppointmentStatus.CONFIRMED;
+	}
+
+	
+	public boolean isExpired() {
+		return appointmentTime.isend();
 	}
 
 	
