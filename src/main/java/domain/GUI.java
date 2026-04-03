@@ -533,7 +533,6 @@ private void showAddAppointmentDialog() {
 
         JTextField tfName  = new JTextField(18);
         JTextField tfAddr  = new JTextField(18);
-        JTextField tfDesc  = new JTextField(18);
         JTextField tfPrice = new JTextField(18);
         JTextField tfCap   = new JTextField(18);
 
