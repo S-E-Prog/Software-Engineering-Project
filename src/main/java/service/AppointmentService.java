@@ -8,12 +8,12 @@ import domain.user;
 import java.util.ArrayList;
 import java.util.List;
 
+
 public class AppointmentService {
 
     private List<appointment> appointments;
     private List<NotificationObserver> observers;
 
-    // Constructor
     public AppointmentService() {
         this.appointments = new ArrayList<>();
         this.observers = new ArrayList<>();
@@ -23,21 +23,16 @@ public class AppointmentService {
      * Book a new appointment
      */
     public appointment bookAppointment(String id, user user, property property, time time) {
-
-        // Check if slot already booked
         for (appointment a : appointments) {
             if (a.getProperty().equals(property) &&
                     a.getAppointmentTime().equal(time) &&
                     a.getStatus() == appointment.AppointmentStatus.CONFIRMED) {
-
                 System.out.println("Slot already booked!");
                 return null;
             }
         }
-
         appointment appointment = new appointment(id, user, property, time);
         appointments.add(appointment);
-
         notifyObservers(user, "Your appointment has been confirmed for " + time.toString());
         return appointment;
     }
@@ -46,38 +41,35 @@ public class AppointmentService {
      * Cancel an appointment by ID
      */
     public boolean cancelAppointment(String appointmentId) {
-
         for (appointment a : appointments) {
             if (a.getAppointmentId().equals(appointmentId)) {
-
                 if (a.getStatus() == appointment.AppointmentStatus.CANCELLED) {
                     System.out.println("Appointment already cancelled.");
                     return false;
                 }
-
                 a.cancel();
-                notifyObservers(a.getBookedBy(), "Your appointment " + appointmentId + " has been cancelled.");
+                notifyObservers(a.getBookedBy(), 
+                    "Your appointment " + appointmentId + " has been cancelled.");
                 return true;
             }
         }
-
         System.out.println("Appointment not found.");
         return false;
     }
-    
-    public boolean adminCancelAppointment(String appointmentId, domain.user admin) {
+
+    /**
+     * Admin cancel any appointment
+     */
+    public boolean adminCancelAppointment(String appointmentId, user admin) {
         for (appointment a : appointments) {
             if (a.getAppointmentId().equals(appointmentId)) {
-
                 if (a.getStatus() == appointment.AppointmentStatus.CANCELLED) {
                     System.out.println("Appointment already cancelled.");
                     return false;
                 }
-
                 a.cancel();
                 notifyObservers(a.getBookedBy(),
                     "Your appointment " + appointmentId + " was cancelled by the administrator.");
-                System.out.println("Admin cancelled appointment: " + appointmentId);
                 return true;
             }
         }
@@ -89,7 +81,6 @@ public class AppointmentService {
      * Check if a specific slot is available
      */
     public boolean isSlotAvailable(property property, time time) {
-
         for (appointment a : appointments) {
             if (a.getProperty().equals(property) &&
                     a.getAppointmentTime().equal(time) &&
@@ -100,18 +91,43 @@ public class AppointmentService {
         return true;
     }
 
+    /**
+     * Get available slots for a property
+     */
     public List<time> getAvailableSlots(property property, List<time> allSlots) {
         List<time> availableSlots = new ArrayList<>();
-
         for (time slot : allSlots) {
             if (isSlotAvailable(property, slot)) {
                 availableSlots.add(slot);
             }
         }
-
         return availableSlots;
     }
-    
+
+    /**
+     * Modify appointment time
+     */
+    public boolean modifyAppointment(String appointmentId, time newTime) {
+        for (appointment a : appointments) {
+            if (a.getAppointmentId().equals(appointmentId)) {
+                if (a.getStatus() != appointment.AppointmentStatus.CONFIRMED) {
+                    System.out.println("Only confirmed appointments can be modified.");
+                    return false;
+                }
+                if (a.getAppointmentTime().isstart()) {
+                    System.out.println("Cannot modify a past appointment.");
+                    return false;
+                }
+                a.setAppointmentTime(newTime);
+                notifyObservers(a.getBookedBy(),
+                    "Your appointment has been modified. New time: " + newTime.toString());
+                return true;
+            }
+        }
+        System.out.println("Appointment not found.");
+        return false;
+    }
+
     /**
      * Get all appointments
      */
@@ -123,15 +139,12 @@ public class AppointmentService {
      * Get appointments for a specific property
      */
     public List<appointment> getAppointmentsByProperty(property property) {
-
         List<appointment> result = new ArrayList<>();
-
         for (appointment a : appointments) {
             if (a.getProperty().equals(property)) {
                 result.add(a);
             }
         }
-
         return result;
     }
 
@@ -139,57 +152,29 @@ public class AppointmentService {
      * Get appointments booked by a specific user
      */
     public List<appointment> getAppointmentsByUser(user user) {
-
         List<appointment> result = new ArrayList<>();
-
         for (appointment a : appointments) {
             if (a.getBookedBy().equals(user)) {
                 result.add(a);
             }
         }
-
         return result;
     }
-    
-    public boolean modifyAppointment(String appointmentId, time newTime) {
-        for (appointment a : appointments) {
-            if (a.getAppointmentId().equals(appointmentId)) {
 
-                if (a.getStatus() != appointment.AppointmentStatus.CONFIRMED) {
-                    System.out.println("Only confirmed appointments can be modified.");
-                    return false;
-                }
-
-                if (a.getAppointmentTime().isstart()) {
-                    System.out.println("Cannot modify a past appointment.");
-                    return false;
-                }
-
-                a.setAppointmentTime(newTime);
-                notifyObservers(a.getBookedBy(), 
-                    "Your appointment has been modified. New time: " + newTime.toString());
-                return true;
-            }
-        }
-        System.out.println("Appointment not found.");
-        return false;
-    }
-    
-    
     public void addObserver(NotificationObserver observer) {
         observers.add(observer);
     }
-    
+
     public void removeObserver(NotificationObserver observer) {
         observers.remove(observer);
     }
-    
+
     private void notifyObservers(user user, String message) {
         for (NotificationObserver observer : observers) {
             observer.update(user, message);
         }
     }
-    
+
     public void sendReminder(String appointmentId) {
         for (appointment a : appointments) {
             if (a.getAppointmentId().equals(appointmentId) &&
@@ -200,6 +185,4 @@ public class AppointmentService {
             }
         }
     }
-    
-    
 }
