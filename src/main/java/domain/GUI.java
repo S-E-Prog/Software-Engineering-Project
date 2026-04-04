@@ -549,6 +549,304 @@ private void showAddAppointmentDialog() {
 }
 
     // ================================================================
+    //  ADMIN — EDIT PROPERTY DIALOG
+    // ================================================================
+    private void showEditPropertyDialog() {
+        int row = propertiesTable.getSelectedRow();
+        if (row < 0) { msg("Please select a property first."); return; }
+        String id = (String) propertiesModel.getValueAt(row, 0);
+        property prop = propertiesList.stream().filter(p -> p.getPropertyId().equals(id)).findFirst().orElse(null);
+        if (prop == null) { msg("Property not found!"); return; }
+
+        JDialog dlg = new JDialog(this, "Edit Property", true);
+        dlg.setSize(400, 370);
+        dlg.setLocationRelativeTo(this);
+        dlg.setLayout(new BorderLayout());
+
+        JPanel form = new JPanel(new GridBagLayout());
+        form.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+        GridBagConstraints g = new GridBagConstraints();
+        g.fill   = GridBagConstraints.HORIZONTAL;
+        g.insets = new Insets(6, 6, 6, 6);
+
+        JTextField tfName  = new JTextField(prop.getName(), 18);
+        JTextField tfAddr  = new JTextField(prop.getAddress(), 18);
+        JTextField tfPrice = new JTextField(String.valueOf(prop.getPrice()), 18);
+        JTextField tfCap   = new JTextField(String.valueOf(prop.getMaxViewingCapacity()), 18);
+
+        String[]    labels = {"Name:", "Address:", "Price:", "Capacity:"};
+        JTextField[] fields = {tfName, tfAddr, tfPrice, tfCap};
+        for (int i = 0; i < fields.length; i++) {
+            g.gridx = 0; g.gridy = i; form.add(new JLabel(labels[i]), g);
+            g.gridx = 1;              form.add(fields[i], g);
+        }
+
+        String[] ownerNames = customList.stream().map(user::getName).toArray(String[]::new);
+        JComboBox<String> ownerCombo = new JComboBox<>(ownerNames);
+        if (prop.getOwner() != null) {
+            for (int i = 0; i < customList.size(); i++)
+                if (customList.get(i).getId().equals(prop.getOwner().getId())) { ownerCombo.setSelectedIndex(i); break; }
+        }
+        g.gridx = 0; g.gridy = 4; form.add(new JLabel("Owner:"), g);
+        g.gridx = 1;              form.add(ownerCombo, g);
+
+        JPanel btns = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
+        JButton save = new JButton("Save"); JButton cancel = new JButton("Cancel");
+        style(save, PRIMARY); style(cancel, GRAY_BTN);
+
+        save.addActionListener(e -> {
+            if (tfName.getText().trim().isEmpty() || tfAddr.getText().trim().isEmpty()) {
+                msg("Name and Address are required!"); return;
+            }
+            try {
+                double price = Double.parseDouble(tfPrice.getText().trim());
+                int    cap   = Integer.parseInt(tfCap.getText().trim());
+                prop.setName(tfName.getText().trim());
+                prop.setAddress(tfAddr.getText().trim());
+                prop.setPrice(price);
+                prop.setMaxViewingCapacity(cap);
+                prop.setOwner(customList.get(ownerCombo.getSelectedIndex()));
+                mangfile.saveToFile(mangfile.FileType.PROPERTY, propertiesList);
+                refreshProperties();
+                msg("Property updated successfully!");
+                dlg.dispose();
+            } catch (NumberFormatException ex) {
+                msg("Price must be a number and Capacity must be a whole number.");
+            }
+        });
+        cancel.addActionListener(e -> dlg.dispose());
+        btns.add(save); btns.add(cancel);
+        dlg.add(form, BorderLayout.CENTER);
+        dlg.add(btns, BorderLayout.SOUTH);
+        dlg.setVisible(true);
+    }
+
+    // ================================================================
+    //  ADMIN — EDIT APPOINTMENT DIALOG
+    // ================================================================
+    private void showEditAppointmentDialog() {
+        int row = appointmentsTable.getSelectedRow();
+        if (row < 0) { msg("Please select an appointment first."); return; }
+        String id = (String) appointmentsModel.getValueAt(row, 0);
+        appointment appt = appointmentsList.stream().filter(a -> a.getAppointmentId().equals(id)).findFirst().orElse(null);
+        if (appt == null) { msg("Appointment not found!"); return; }
+
+        JDialog dlg = new JDialog(this, "Edit Appointment", true);
+        dlg.setSize(455, 300);
+        dlg.setLocationRelativeTo(this);
+        dlg.setLayout(new BorderLayout());
+
+        JPanel form = new JPanel(new GridBagLayout());
+        form.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+        GridBagConstraints g = new GridBagConstraints();
+        g.fill   = GridBagConstraints.HORIZONTAL;
+        g.insets = new Insets(6, 6, 6, 6);
+
+        time curTime = appt.getAppointmentTime();
+        String curDate = curTime.getdatetime().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        String curHM   = curTime.getdatetime().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
+
+        JTextField tfDate    = new JTextField(curDate, 20);
+        JTextField tfTime    = new JTextField(curHM, 20);
+        JTextField tfEndTime = new JTextField("30", 20);
+        tfDate.setToolTipText("Format: yyyy-MM-dd");
+        tfTime.setToolTipText("Format: HH:mm");
+        tfEndTime.setToolTipText("Max 45 minutes");
+
+        String[] statusNames = {"AVAILABLE", "CONFIRMED", "CANCELLED", "COMPLETED"};
+        JComboBox<String> statusCombo = new JComboBox<>(statusNames);
+        statusCombo.setSelectedItem(appt.getStatus().toString());
+
+        g.gridx = 0; g.gridy = 0; form.add(new JLabel("Date (yyyy-MM-dd):"),      g); g.gridx = 1; form.add(tfDate,      g);
+        g.gridx = 0; g.gridy = 1; form.add(new JLabel("Time (HH:mm):"),           g); g.gridx = 1; form.add(tfTime,      g);
+        g.gridx = 0; g.gridy = 2; form.add(new JLabel("Duration max 45min(mm):"), g); g.gridx = 1; form.add(tfEndTime,   g);
+        g.gridx = 0; g.gridy = 3; form.add(new JLabel("Status:"),                 g); g.gridx = 1; form.add(statusCombo, g);
+
+        JPanel btns = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
+        JButton save = new JButton("Save"); JButton cancel = new JButton("Cancel");
+        style(save, PRIMARY); style(cancel, GRAY_BTN);
+
+        save.addActionListener(e -> {
+            String dateStr = tfDate.getText().trim();
+            String timeStr = tfTime.getText().trim();
+            String endStr  = tfEndTime.getText().trim();
+            if (dateStr.isEmpty() || timeStr.isEmpty() || endStr.isEmpty()) {
+                msg("Please fill all fields!"); return;
+            }
+            try {
+                int endMin = Integer.parseInt(endStr);
+                if (endMin > 45) { msg("Duration must be 45 minutes or less!"); return; }
+                String[] dp = dateStr.split("-"); String[] tp = timeStr.split(":");
+                time t = new time();
+                t.setdate(Integer.parseInt(tp[0]), Integer.parseInt(tp[1]),
+                          Integer.parseInt(dp[2]), Integer.parseInt(dp[1]), Integer.parseInt(dp[0]));
+                t.setenddate(endMin);
+                appt.setAppointmentTime(t);
+                String sel = (String) statusCombo.getSelectedItem();
+                appt.setStatus(appointment.AppointmentStatus.valueOf(sel));
+                mangfile.saveToFile(mangfile.FileType.APPOINTMENT, appointmentsList);
+                refreshAppointments();
+                msg("Appointment updated successfully!");
+                dlg.dispose();
+            } catch (Exception ex) {
+                msg("Invalid format. Use yyyy-MM-dd and HH:mm");
+            }
+        });
+        cancel.addActionListener(e -> dlg.dispose());
+        btns.add(save); btns.add(cancel);
+        dlg.add(form, BorderLayout.CENTER);
+        dlg.add(btns, BorderLayout.SOUTH);
+        dlg.setVisible(true);
+    }
+
+    // ================================================================
+    //  USER — EDIT MY PROPERTY DIALOG
+    // ================================================================
+    private void showUserEditPropertyDialog() {
+        if (currentUser == null) return;
+        int row = myPropsTable.getSelectedRow();
+        if (row < 0) { msg("Please select a property first."); return; }
+        String id = (String) myPropsModel.getValueAt(row, 0);
+        property prop = propertiesList.stream()
+            .filter(p -> p.getPropertyId().equals(id) && p.getOwner() != null && p.getOwner().getId().equals(currentUser.getId()))
+            .findFirst().orElse(null);
+        if (prop == null) { msg("Property not found or not yours!"); return; }
+
+        JDialog dlg = new JDialog(this, "Edit My Property", true);
+        dlg.setSize(400, 300);
+        dlg.setLocationRelativeTo(this);
+        dlg.setLayout(new BorderLayout());
+
+        JPanel form = new JPanel(new GridBagLayout());
+        form.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+        GridBagConstraints g = new GridBagConstraints();
+        g.fill   = GridBagConstraints.HORIZONTAL;
+        g.insets = new Insets(6, 6, 6, 6);
+
+        JTextField tfName  = new JTextField(prop.getName(), 18);
+        JTextField tfAddr  = new JTextField(prop.getAddress(), 18);
+        JTextField tfPrice = new JTextField(String.valueOf(prop.getPrice()), 18);
+        JTextField tfCap   = new JTextField(String.valueOf(prop.getMaxViewingCapacity()), 18);
+
+        String[] labels = {"Name:", "Address:", "Price:", "Capacity:"};
+        JTextField[] fields = {tfName, tfAddr, tfPrice, tfCap};
+        for (int i = 0; i < fields.length; i++) {
+            g.gridx = 0; g.gridy = i; form.add(new JLabel(labels[i]), g);
+            g.gridx = 1;              form.add(fields[i], g);
+        }
+
+        JPanel btns = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
+        JButton save = new JButton("Save"); JButton cancel = new JButton("Cancel");
+        style(save, PRIMARY); style(cancel, GRAY_BTN);
+
+        save.addActionListener(e -> {
+            if (tfName.getText().trim().isEmpty() || tfAddr.getText().trim().isEmpty()) {
+                msg("Name and Address are required!"); return;
+            }
+            try {
+                double price = Double.parseDouble(tfPrice.getText().trim());
+                int    cap   = Integer.parseInt(tfCap.getText().trim());
+                prop.setName(tfName.getText().trim());
+                prop.setAddress(tfAddr.getText().trim());
+                prop.setPrice(price);
+                prop.setMaxViewingCapacity(cap);
+                mangfile.saveToFile(mangfile.FileType.PROPERTY, propertiesList);
+                refreshMyProps();
+                msg("Property updated successfully!");
+                dlg.dispose();
+            } catch (NumberFormatException ex) {
+                msg("Price must be a number and Capacity must be a whole number.");
+            }
+        });
+        cancel.addActionListener(e -> dlg.dispose());
+        btns.add(save); btns.add(cancel);
+        dlg.add(form, BorderLayout.CENTER);
+        dlg.add(btns, BorderLayout.SOUTH);
+        dlg.setVisible(true);
+    }
+
+    // ================================================================
+    //  USER — EDIT MY APPOINTMENT DIALOG
+    // ================================================================
+    private void showUserEditAppointmentDialog() {
+        if (currentUser == null) return;
+        int row = myApptTable.getSelectedRow();
+        if (row < 0) { msg("Please select an appointment first."); return; }
+        String id = (String) myApptModel.getValueAt(row, 0);
+        appointment appt = appointmentsList.stream()
+            .filter(a -> a.getAppointmentId().equals(id)
+                && a.getProperty().getOwner() != null
+                && a.getProperty().getOwner().getId().equals(currentUser.getId()))
+            .findFirst().orElse(null);
+        if (appt == null) { msg("Appointment not found or not yours!"); return; }
+        if (appt.getStatus() == appointment.AppointmentStatus.CANCELLED ||
+            appt.getStatus() == appointment.AppointmentStatus.COMPLETED) {
+            msg("Cannot edit a cancelled or completed appointment."); return;
+        }
+
+        JDialog dlg = new JDialog(this, "Edit My Appointment", true);
+        dlg.setSize(420, 260);
+        dlg.setLocationRelativeTo(this);
+        dlg.setLayout(new BorderLayout());
+
+        JPanel form = new JPanel(new GridBagLayout());
+        form.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+        GridBagConstraints g = new GridBagConstraints();
+        g.fill   = GridBagConstraints.HORIZONTAL;
+        g.insets = new Insets(6, 6, 6, 6);
+
+        time curTime = appt.getAppointmentTime();
+        String curDate = curTime.getdatetime().format(java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy"));
+        String curHM   = curTime.getdatetime().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
+
+        JTextField tfDate    = new JTextField(curDate, 20);
+        JTextField tfTime    = new JTextField(curHM, 20);
+        JTextField tfEndTime = new JTextField("30", 20);
+        tfDate.setToolTipText("Format: dd-MM-yyyy");
+        tfTime.setToolTipText("Format: HH:mm");
+        tfEndTime.setToolTipText("Max 45 minutes");
+
+        g.gridx = 0; g.gridy = 0; form.add(new JLabel("Date (dd-MM-yyyy):"),      g); g.gridx = 1; form.add(tfDate,    g);
+        g.gridx = 0; g.gridy = 1; form.add(new JLabel("Time (HH:mm):"),           g); g.gridx = 1; form.add(tfTime,    g);
+        g.gridx = 0; g.gridy = 2; form.add(new JLabel("Duration max 45min(mm):"), g); g.gridx = 1; form.add(tfEndTime, g);
+
+        JPanel btns = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
+        JButton save = new JButton("Save"); JButton cancel = new JButton("Cancel");
+        style(save, PRIMARY); style(cancel, GRAY_BTN);
+
+        save.addActionListener(e -> {
+            String dateStr = tfDate.getText().trim();
+            String timeStr = tfTime.getText().trim();
+            String endStr  = tfEndTime.getText().trim();
+            if (dateStr.isEmpty() || timeStr.isEmpty() || endStr.isEmpty()) {
+                msg("Please fill all fields!"); return;
+            }
+            try {
+                int endMin = Integer.parseInt(endStr);
+                if (endMin > 45) { msg("Duration must be 45 minutes or less!"); return; }
+                String[] dp = dateStr.split("-"); String[] tp = timeStr.split(":");
+                time t = new time();
+                t.setdate(Integer.parseInt(tp[0]), Integer.parseInt(tp[1]),
+                          Integer.parseInt(dp[2]), Integer.parseInt(dp[1]), Integer.parseInt(dp[0]));
+                t.setenddate(endMin);
+                appt.setAppointmentTime(t);
+                mangfile.saveToFile(mangfile.FileType.APPOINTMENT, appointmentsList);
+                refreshMyAppts();
+                refreshAvailableAppts();
+                msg("Appointment updated successfully!");
+                dlg.dispose();
+            } catch (Exception ex) {
+                msg("Invalid format. Use dd-MM-yyyy and HH:mm");
+            }
+        });
+        cancel.addActionListener(e -> dlg.dispose());
+        btns.add(save); btns.add(cancel);
+        dlg.add(form, BorderLayout.CENTER);
+        dlg.add(btns, BorderLayout.SOUTH);
+        dlg.setVisible(true);
+    }
+
+    // ================================================================
     //  ADD PROPERTY DIALOG
     // ================================================================
     
@@ -722,6 +1020,11 @@ private void showAddAppointmentDialog() {
         addBtn.addActionListener(e -> showAddPropertyDialog());
         top.add(addBtn);
 
+        JButton editPropBtn = new JButton("Edit Selected");
+        style(editPropBtn, new Color(255, 140, 0));
+        editPropBtn.addActionListener(e -> showEditPropertyDialog());
+        top.add(editPropBtn);
+
         JButton delBtn = new JButton("Delete Selected");
         style(delBtn, RED);
         delBtn.addActionListener(e -> deleteProperty());
@@ -810,6 +1113,11 @@ private void showAddAppointmentDialog() {
         style(addBtn, PRIMARY);
         addBtn.addActionListener(e -> showAddAppointmentDialog());
         top.add(addBtn);
+
+        JButton editApptBtn = new JButton("Edit Selected");
+        style(editApptBtn, new Color(255, 140, 0));
+        editApptBtn.addActionListener(e -> showEditAppointmentDialog());
+        top.add(editApptBtn);
 
         JButton delBtn = new JButton("Delete Selected");
         style(delBtn, RED);
@@ -971,6 +1279,11 @@ private void showAddAppointmentDialog() {
         style(addApptBtn, BLUE);
         addApptBtn.addActionListener(e -> showUserAddAppointmentDialog());
         top.add(addApptBtn);
+
+        JButton editMyApptBtn = new JButton("Edit Selected");
+        style(editMyApptBtn, new Color(255, 140, 0));
+        editMyApptBtn.addActionListener(e -> showUserEditAppointmentDialog());
+        top.add(editMyApptBtn);
             
     JButton cancelBtn = new JButton("Cancel Appointment");
      style(cancelBtn, RED);
@@ -1019,6 +1332,11 @@ private void showAddAppointmentDialog() {
         style(addPropBtn, PRIMARY);
         addPropBtn.addActionListener(e -> showUserAddPropertyDialog());
         top.add(addPropBtn);
+
+        JButton editMyPropBtn = new JButton("Edit Selected");
+        style(editMyPropBtn, new Color(255, 140, 0));
+        editMyPropBtn.addActionListener(e -> showUserEditPropertyDialog());
+        top.add(editMyPropBtn);
 
         JButton delBtn = new JButton("Delete Selected");
         style(delBtn, RED);
