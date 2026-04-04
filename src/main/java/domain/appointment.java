@@ -1,11 +1,12 @@
 package domain;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 
 public class appointment implements Serializable {
 
 	private final String appointmentId;
-	private final user bookedBy;
+	private final ArrayList<user> bookedBy;
 	private final property property;
 	private time appointmentTime;
 	private AppointmentStatus status;
@@ -17,12 +18,36 @@ public class appointment implements Serializable {
 		COMPLETED
 	}
 
-	public appointment(String appointmentId, user bookedBy, property property, time appointmentTime) {
+	public appointment(String appointmentId, property property, time appointmentTime) {
 		this.appointmentId = appointmentId;
-		this.bookedBy = bookedBy;
+		this.bookedBy = new ArrayList<>();
 		this.property = property;
 		this.appointmentTime = appointmentTime;
 		this.status = AppointmentStatus.AVAILABLE;
+	}
+
+	public boolean addBooking(user u) {
+		for (user existing : bookedBy)
+			if (existing.getId().equals(u.getId())) return false; // مسجل مسبقاً
+		bookedBy.add(u);
+		return true;
+	}
+
+
+	public boolean removeBooking(user u) {
+		return bookedBy.removeIf(existing -> existing.getId().equals(u.getId()));
+	}
+
+
+	public boolean isBookedBy(user u) {
+		for (user existing : bookedBy)
+			if (existing.getId().equals(u.getId())) return true;
+		return false;
+	}
+
+
+	public int getBookingCount() {
+		return bookedBy.size();
 	}
 
 	public void cancel() {
@@ -32,7 +57,7 @@ public class appointment implements Serializable {
 	public void complete() {
 		this.status = AppointmentStatus.COMPLETED;
 	}
-	
+
 	public void confirm() {
 		this.status = AppointmentStatus.CONFIRMED;
 	}
@@ -41,21 +66,21 @@ public class appointment implements Serializable {
 		return status == AppointmentStatus.AVAILABLE;
 	}
 
+
 	public boolean isConfirmed() {
 		return status == AppointmentStatus.CONFIRMED;
 	}
 
-	
 	public boolean isExpired() {
 		return appointmentTime.isend();
 	}
 
-	
-
-	public String getAppointmentTime() {
-		time appTime=this.appointmentTime;
-		return this.appointmentTime.toString()+ " to "+appTime.toStringendtime() ;
+	public String getAppointmentTimeString() {
+		return this.appointmentTime.toString() + " to " + this.appointmentTime.toStringendtime();
 	}
+	public time getAppointmentTime() {
+    return this.appointmentTime;
+}
 
 	public void setAppointmentTime(time appointmentTime) {
 		this.appointmentTime = appointmentTime;
@@ -73,7 +98,8 @@ public class appointment implements Serializable {
 		return appointmentId;
 	}
 
-	public user getBookedBy() {
+
+	public ArrayList<user> getBookedBy() {
 		return bookedBy;
 	}
 
@@ -83,8 +109,9 @@ public class appointment implements Serializable {
 
 	@Override
 	public String toString() {
-		return "Appointment{id='" + appointmentId + "', property=" + property.getAddress() + ", time=" + appointmentTime
-				+ ", status=" + status + "}";
+		return "Appointment{id='" + appointmentId + "', property=" + property.getAddress()
+				+ ", time=" + appointmentTime + ", status=" + status
+				+ ", bookings=" + bookedBy.size() + "}";
 	}
 
 }

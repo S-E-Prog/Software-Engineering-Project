@@ -1,5 +1,7 @@
 package domain;
-
+import java.util.concurrent.*;
+import java.util.*;
+import java.time.*;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
@@ -24,7 +26,7 @@ class InnerGUI extends JFrame implements ActionListener {
     ArrayList<user>        customList       = new ArrayList<>();
     ArrayList<property>    propertiesList   = new ArrayList<>();
     ArrayList<appointment> appointmentsList = new ArrayList<>();
-    ArrayList<String[]> bookingsList = new ArrayList<>();
+
 
     // --- Login fields ---
     JTextField     emailField;
@@ -92,6 +94,9 @@ class InnerGUI extends JFrame implements ActionListener {
         mainPanel.add(buildUserPanel(),     "user");
 
         add(mainPanel);
+
+        startReminderChecker();
+
     }
 
     /** Centralised data-load so we can call it from anywhere. */
@@ -100,13 +105,10 @@ class InnerGUI extends JFrame implements ActionListener {
         customList       = mangfile.loadFromFile(mangfile.FileType.CUSTOMER);
         propertiesList   = mangfile.loadFromFile(mangfile.FileType.PROPERTY);
         appointmentsList = mangfile.loadFromFile(mangfile.FileType.APPOINTMENT);
-       bookingsList = mangfile.loadFromFile(mangfile.FileType.BOOKING);
+
 
     }
 
-    private void saveBookings() {
-        mangfile.saveToFile(mangfile.FileType.BOOKING, bookingsList);
-    }
 
     // ================================================================
     //  STYLING HELPERS
@@ -330,7 +332,7 @@ class InnerGUI extends JFrame implements ActionListener {
    
     private void refreshDashboard() {
         if (dashboardPanel == null) return;
-       
+        checkAndUpdateAppointmentStatuses();
         Component center = ((BorderLayout) dashboardPanel.getLayout()).getLayoutComponent(BorderLayout.CENTER);
         if (!(center instanceof JScrollPane)) return;
         Component view = ((JScrollPane) center).getViewport().getView();
@@ -368,16 +370,17 @@ class InnerGUI extends JFrame implements ActionListener {
         lbl.setFont(new Font("Arial", Font.BOLD, 16));
         p.add(lbl, BorderLayout.NORTH);
 
-        DefaultTableModel m = new DefaultTableModel(new String[]{"ID", "User", "Property", "Date","Available seats", "Status"}, 0);
+        DefaultTableModel m = new DefaultTableModel(new String[]{"ID", "Property", "Owner", "Date","Available seats", "Status"}, 0);
         int count = 0;
         for (int i = appointmentsList.size() - 1; i >= 0 && count < 5; i--) {
             appointment a = appointmentsList.get(i);
+            int slotsLeft = a.getProperty().getMaxViewingCapacity() - a.getBookingCount();
             m.addRow(new Object[]{
                 a.getAppointmentId(),
-                a.getBookedBy().getName(),
                 a.getProperty().getName(),
-                a.getAppointmentTime(),
-                a.getProperty().getMaxViewingCapacity() - countBookings(a.getAppointmentId()),
+                a.getProperty().getOwner() != null ? a.getProperty().getOwner().getName() : "N/A",
+                a.getAppointmentTimeString(),
+                slotsLeft,
                 a.getStatus()
             });
             count++;
@@ -530,7 +533,7 @@ private void showAddAppointmentDialog() {
             msg("Invalid format. Use yyyy-MM-dd and HH:mm and mm"); return;
         }
 
-        appointment newApp = new appointment(appId, selUser, selProp, t);
+        appointment newApp = new appointment(appId, selProp, t);
         appointmentsList.add(newApp);
         mangfile.saveToFile(mangfile.FileType.APPOINTMENT, appointmentsList);
         msg("Appointment added successfully!");
@@ -819,7 +822,7 @@ private void showAddAppointmentDialog() {
         top.add(refBtn);
 
         appointmentsModel = new DefaultTableModel(
-            new String[]{"ID", "User", "Property", "Date & Time", "Status"}, 0) {
+            new String[]{"ID", "Bookings", "Property", "Date & Time", "Status"}, 0) {
             @Override public boolean isCellEditable(int r, int c) { return false; }
         };
         appointmentsTable = new JTable(appointmentsModel);
@@ -838,15 +841,15 @@ private void showAddAppointmentDialog() {
         String filter = (String) statusFilter.getSelectedItem();
         for (appointment a : appointmentsList) {
             if (!"ALL".equals(filter) && !a.getStatus().toString().equals(filter)) continue;
-             int slotsLeft = a.getProperty().getMaxViewingCapacity() - countBookings(a.getAppointmentId());
             appointmentsModel.addRow(new Object[]{
                 a.getAppointmentId(),
-                a.getBookedBy().getName(),
+                a.getBookingCount() + "/" + a.getProperty().getMaxViewingCapacity() + " booked",
                 a.getProperty().getName(),
-                a.getAppointmentTime(),
+                a.getAppointmentTimeString(),
                 a.getStatus()
             });
         }
+         checkAndUpdateAppointmentStatuses();
     }
 
     private void filterAppointments(String kw) {
@@ -856,14 +859,13 @@ private void showAddAppointmentDialog() {
         for (appointment a : appointmentsList) {
             if (!"ALL".equals(filter) && !a.getStatus().toString().equals(filter)) continue;
             if (!kw.isEmpty()
-                    && !a.getBookedBy().getName().toLowerCase().contains(lower)
                     && !a.getProperty().getName().toLowerCase().contains(lower)
                     && !a.getAppointmentId().toLowerCase().contains(lower)) continue;
             appointmentsModel.addRow(new Object[]{
                 a.getAppointmentId(),
-                a.getBookedBy().getName(),
+                a.getBookingCount() + "/" + a.getProperty().getMaxViewingCapacity() + " booked",
                 a.getProperty().getName(),
-                a.getAppointmentTime(),
+                a.getAppointmentTimeString(),
                 a.getStatus()
             });
         }
@@ -907,8 +909,8 @@ private void showAddAppointmentDialog() {
 
         JTabbedPane tabs = new JTabbedPane();
         tabs.addTab("Available Appointments", buildAvailableApptTab());
-        tabs.addTab("My Appointments",        buildMyApptTab());
         tabs.addTab("My Booked Appointments", buildMybookedTab());
+        tabs.addTab("My Appointments",        buildMyApptTab());
         tabs.addTab("My Properties",          buildMyPropsTab());
 
         panel.add(header, BorderLayout.NORTH);
@@ -969,6 +971,13 @@ private void showAddAppointmentDialog() {
         style(addApptBtn, BLUE);
         addApptBtn.addActionListener(e -> showUserAddAppointmentDialog());
         top.add(addApptBtn);
+            
+    JButton cancelBtn = new JButton("Cancel Appointment");
+     style(cancelBtn, RED);
+
+      cancelBtn.addActionListener(e -> cancelMyAppointment());
+
+       top.add(cancelBtn);
 
         JButton delBtn = new JButton("Delete Selected");
         style(delBtn, RED);
@@ -1078,15 +1087,13 @@ private void showAddAppointmentDialog() {
         checkAndUpdateAppointmentStatuses();
         for (appointment a : appointmentsList) {
             if (a.getStatus() != appointment.AppointmentStatus.AVAILABLE) continue;
-        
-            if (currentUser != null && a.getBookedBy() != null
-                    && a.getBookedBy().getId().equals(currentUser.getId())) continue;
-            int slotsLeft = a.getProperty().getMaxViewingCapacity() - countBookings(a.getAppointmentId());
+            if (currentUser != null && a.isBookedBy(currentUser)) continue;
+            int slotsLeft = a.getProperty().getMaxViewingCapacity() - a.getBookingCount();
             availableApptModel.addRow(new Object[]{
                 a.getAppointmentId(),
                 a.getProperty().getName(),
-                a.getBookedBy() != null ? a.getBookedBy().getName() : "N/A",
-                a.getAppointmentTime(),
+                a.getProperty().getOwner() != null ? a.getProperty().getOwner().getName() : "N/A",
+                a.getAppointmentTimeString(),
                 slotsLeft
             });
         }
@@ -1096,14 +1103,14 @@ private void showAddAppointmentDialog() {
         myApptModel.setRowCount(0);
         if (currentUser == null) return;
         loadData();
-     
+      checkAndUpdateAppointmentStatuses();
         for (appointment a : appointmentsList) {
             if (a.getProperty().getOwner() != null
                     && a.getProperty().getOwner().getId().equals(currentUser.getId())) {
                 myApptModel.addRow(new Object[]{
                     a.getAppointmentId(),
                     a.getProperty().getName(),
-                    a.getAppointmentTime(),
+                    a.getAppointmentTimeString(),
                     a.getStatus()
                 });
             }
@@ -1114,18 +1121,15 @@ private void showAddAppointmentDialog() {
         myBookedModel.setRowCount(0);
         if (currentUser == null) return;
         loadData();
-        for (String[] b : bookingsList) {
-            if (!b[0].equals(currentUser.getId())) continue;
-            for (appointment a : appointmentsList) {
-                if (!a.getAppointmentId().equals(b[1])) continue;
-                myBookedModel.addRow(new Object[]{
-                    a.getAppointmentId(),
-                    a.getProperty().getName(),
-                    a.getAppointmentTime(),
-                    a.getStatus()
-                });
-                break;
-            }
+         checkAndUpdateAppointmentStatuses();
+        for (appointment a : appointmentsList) {
+            if (!a.isBookedBy(currentUser)) continue;
+            myBookedModel.addRow(new Object[]{
+                a.getAppointmentId(),
+                a.getProperty().getName(),
+                a.getAppointmentTimeString(),
+                appointment.AppointmentStatus.CONFIRMED
+            });
         }
     }
 
@@ -1145,10 +1149,9 @@ private void showAddAppointmentDialog() {
     }
 
     private int countBookings(String apptId) {
-        int count = 0;
-        for (String[] b : bookingsList)
-            if (b[1].equals(apptId)) count++;
-        return count;
+        for (appointment a : appointmentsList)
+            if (a.getAppointmentId().equals(apptId)) return a.getBookingCount();
+        return 0;
     }
 
     // ================================================================
@@ -1160,31 +1163,23 @@ private void showAddAppointmentDialog() {
         if (row < 0) { msg("Please select an appointment to book."); return; }
         String id = (String) availableApptModel.getValueAt(row, 0);
 
-      
-        for (String[] b : bookingsList)
-            if (b[0].equals(currentUser.getId()) && b[1].equals(id)) {
-                msg("You already booked this appointment!"); return;
-            }
-
         for (appointment a : appointmentsList) {
             if (!a.getAppointmentId().equals(id)) continue;
+            if (a.isBookedBy(currentUser)) {
+                msg("You already booked this appointment!"); return;
+            }
             if (a.getStatus() != appointment.AppointmentStatus.AVAILABLE) {
                 msg("This appointment is no longer available."); return;
             }
             int cap      = a.getProperty().getMaxViewingCapacity();
-            int bookings = countBookings(id);
+            int bookings = a.getBookingCount();
             if (bookings >= cap) {
                 msg("This appointment is fully booked!"); return;
             }
             if (confirm("Book this appointment?")) {
-               
-                bookingsList.add(new String[]{currentUser.getId(), id});
-                saveBookings();
-           
-                if (countBookings(id) >= cap) {
-                    a.confirm();
-                    mangfile.saveToFile(mangfile.FileType.APPOINTMENT, appointmentsList);
-                }
+                a.addBooking(currentUser);
+                if (a.getBookingCount() >= cap) a.confirm();
+                mangfile.saveToFile(mangfile.FileType.APPOINTMENT, appointmentsList);
                 msg("Appointment booked successfully!");
                 refreshAvailableAppts();
                 refreshMyBooked();
@@ -1205,13 +1200,9 @@ private void showAddAppointmentDialog() {
                 msg("Cannot cancel a completed or already cancelled appointment."); return;
             }
             if (confirm("Cancel this booking? It will become available again.")) {
-               
-                bookingsList.removeIf(b -> b[0].equals(currentUser.getId()) && b[1].equals(id));
-                saveBookings();
-                if (countBookings(id) == 0) {
-                    a.setStatus(appointment.AppointmentStatus.AVAILABLE);
-                    mangfile.saveToFile(mangfile.FileType.APPOINTMENT, appointmentsList);
-                }
+                a.removeBooking(currentUser);
+                if (a.getBookingCount() == 0) a.setStatus(appointment.AppointmentStatus.AVAILABLE);
+                mangfile.saveToFile(mangfile.FileType.APPOINTMENT, appointmentsList);
                 msg("Booking cancelled. Appointment is now available.");
                 refreshMyBooked();
                 refreshAvailableAppts();
@@ -1232,8 +1223,13 @@ private void showAddAppointmentDialog() {
                 changed = true;
             }
 
+              if (a.getStatus() == appointment.AppointmentStatus.AVAILABLE && a.isExpired() && a.getBookingCount() <= 0) {
+                a.cancel();
+                changed = true;
+                continue;
+            }
          
-            if (a.getStatus() == appointment.AppointmentStatus.AVAILABLE && a.isExpired()) {
+          else  if (a.getStatus() == appointment.AppointmentStatus.AVAILABLE && a.isExpired()) {
                 a.complete();
                 changed = true;
                 continue;
@@ -1267,6 +1263,64 @@ private void showAddAppointmentDialog() {
         checker.start();
     }
 
+//=============================================================
+//Sending alerts and messages to users↓↓↓↓↓↓↓↓↓
+//=============================================================
+
+private HashSet<String> notifiedAppointments = new HashSet<>();
+
+private void startReminderChecker() {
+    ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+
+    scheduler.scheduleAtFixedRate(() -> {
+
+        LocalDateTime now = LocalDateTime.now();
+
+        for (appointment appt : appointmentsList) {
+
+            if (appt.getStatus() == appointment.AppointmentStatus.CANCELLED ||
+                appt.getStatus() == appointment.AppointmentStatus.COMPLETED)
+                continue;
+
+            LocalDateTime apptTime = appt.getAppointmentTime().getdatetime();
+            long minutes = Duration.between(now, apptTime).toMinutes();
+
+            if (minutes >= 0 && minutes <= 5) {
+
+               
+                for (user u : appt.getBookedBy()) {
+
+                    String notificationKey = appt.getAppointmentId() + "-" + u.getEmail();
+
+                    if (notifiedAppointments.contains(notificationKey))
+                        continue;
+
+                    notifiedAppointments.add(notificationKey);
+
+                    SwingUtilities.invokeLater(() -> {
+                        Toolkit.getDefaultToolkit().beep();
+
+                        JOptionPane.showMessageDialog(null, 
+                            " Reminder!\nYour appointment for :"
+                                + appt.getProperty().getName()
+                                + "\nStarts in less than 5 minutes! :"
+                                + appt.getAppointmentTime()
+                                + "\nFor user: " + u.getEmail(),
+                            "Appointment Reminder",
+                            JOptionPane.INFORMATION_MESSAGE
+                        );
+                    });
+                }
+            }
+        }
+
+    }, 0, 30, TimeUnit.SECONDS);
+}
+
+//================================================================
+//Sending alerts and messages to users↑↑↑↑↑↑↑↑↑
+//================================================================
+
     // ================================================================
     //  USER PANEL — FILTER METHODS
     // ================================================================
@@ -1275,18 +1329,16 @@ private void showAddAppointmentDialog() {
         String lower = kw.toLowerCase();
         for (appointment a : appointmentsList) {
             if (a.getStatus() != appointment.AppointmentStatus.AVAILABLE) continue;
-            if (currentUser != null && a.getBookedBy() != null
-                    && a.getBookedBy().getId().equals(currentUser.getId())) continue;
+            if (currentUser != null && a.isBookedBy(currentUser)) continue;
             if (!kw.isEmpty()
                     && !a.getProperty().getName().toLowerCase().contains(lower)
-                    && !a.getAppointmentId().toLowerCase().contains(lower)
-                    && !(a.getBookedBy() != null && a.getBookedBy().getName().toLowerCase().contains(lower))) continue;
-            int slotsLeft = a.getProperty().getMaxViewingCapacity() - countBookings(a.getAppointmentId());
+                    && !a.getAppointmentId().toLowerCase().contains(lower)) continue;
+            int slotsLeft = a.getProperty().getMaxViewingCapacity() - a.getBookingCount();
             availableApptModel.addRow(new Object[]{
                 a.getAppointmentId(),
                 a.getProperty().getName(),
-                a.getBookedBy() != null ? a.getBookedBy().getName() : "N/A",
-                a.getAppointmentTime(),
+                a.getProperty().getOwner() != null ? a.getProperty().getOwner().getName() : "N/A",
+                a.getAppointmentTimeString(),
                 slotsLeft
             });
         }
@@ -1303,7 +1355,7 @@ private void showAddAppointmentDialog() {
                     && !a.getProperty().getName().toLowerCase().contains(lower)
                     && !a.getAppointmentId().toLowerCase().contains(lower)) continue;
             myApptModel.addRow(new Object[]{
-                a.getAppointmentId(), a.getProperty().getName(), a.getAppointmentTime(), a.getStatus()
+                a.getAppointmentId(), a.getProperty().getName(), a.getAppointmentTimeString(), a.getStatus()
             });
         }
     }
@@ -1312,18 +1364,14 @@ private void showAddAppointmentDialog() {
         myBookedModel.setRowCount(0);
         if (currentUser == null) return;
         String lower = kw.toLowerCase();
-        for (String[] b : bookingsList) {
-            if (!b[0].equals(currentUser.getId())) continue;
-            for (appointment a : appointmentsList) {
-                if (!a.getAppointmentId().equals(b[1])) continue;
-                if (!kw.isEmpty()
-                        && !a.getProperty().getName().toLowerCase().contains(lower)
-                        && !a.getAppointmentId().toLowerCase().contains(lower)) break;
-                myBookedModel.addRow(new Object[]{
-                    a.getAppointmentId(), a.getProperty().getName(), a.getAppointmentTime(), a.getStatus()
-                });
-                break;
-            }
+        for (appointment a : appointmentsList) {
+            if (!a.isBookedBy(currentUser)) continue;
+            if (!kw.isEmpty()
+                    && !a.getProperty().getName().toLowerCase().contains(lower)
+                    && !a.getAppointmentId().toLowerCase().contains(lower)) continue;
+            myBookedModel.addRow(new Object[]{
+                a.getAppointmentId(), a.getProperty().getName(), a.getAppointmentTimeString(), a.getStatus()
+            });
         }
     }
 
@@ -1344,11 +1392,46 @@ private void showAddAppointmentDialog() {
     }
 
    
+private void cancelMyAppointment() {
+    int row = myApptTable.getSelectedRow();
+
+    if (row < 0) {
+        msg("Please select an appointment first.");
+        return;
+    }
+
+    String id = (String) myApptModel.getValueAt(row, 0);
+
+    for (appointment a : appointmentsList) {
+        if (a.getAppointmentId().equals(id)) {
+
+            if (a.getStatus() == appointment.AppointmentStatus.CANCELLED) {
+                msg("This appointment is already cancelled.");
+                return;
+            }
+
+            if (a.getStatus() == appointment.AppointmentStatus.COMPLETED) {
+                msg("You cannot cancel a completed appointment.");
+                return;
+            }
+
+            a.setStatus(appointment.AppointmentStatus.CANCELLED);
+
+            mangfile.saveToFile(mangfile.FileType.APPOINTMENT, appointmentsList);
+
+            msg("Appointment cancelled successfully!");
+            refreshMyAppts();
+            refreshAvailableAppts();   
+            return;
+        }
+    }
+}
+
     private void deleteMyAppointment() {
         int row = myApptTable.getSelectedRow();
         if (row < 0) { msg("Please select an appointment first."); return; }
         String id = (String) myApptModel.getValueAt(row, 0);
-        // Only allow deletion if appointment is AVAILABLE (not yet booked)
+
         for (appointment a : appointmentsList) {
             if (!a.getAppointmentId().equals(id)) continue;
             if (a.getStatus() == appointment.AppointmentStatus.CONFIRMED) {
@@ -1440,7 +1523,7 @@ private void showAddAppointmentDialog() {
                 t.setdate(Integer.parseInt(tp[0]), Integer.parseInt(tp[1]),
                           Integer.parseInt(dp[2]), Integer.parseInt(dp[1]), Integer.parseInt(dp[0]));
                 t.setenddate(Integer.parseInt(endStr));
-                appointment newApp = new appointment(appId, currentUser, selProp, t);
+                appointment newApp = new appointment(appId, selProp, t);
                 newApp.setStatus(appointment.AppointmentStatus.AVAILABLE);
                 appointmentsList.add(newApp);
                 mangfile.saveToFile(mangfile.FileType.APPOINTMENT, appointmentsList);
