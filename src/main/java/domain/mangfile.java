@@ -34,7 +34,7 @@ public class mangfile {
     @SuppressWarnings("unchecked")
     public static <T> ArrayList<T> loadFromFile(FileType fileType) {
         File file = new File(fileType.getPath());
-        if (!file.exists()) return new ArrayList<>(); // إذا لم يوجد الملف، ارجع قائمة فارغة
+        if (!file.exists()) return new ArrayList<>();
 
         try (ObjectInputStream in = new ObjectInputStream(new FileInputStream(file))) {
             return (ArrayList<T>) in.readObject();
