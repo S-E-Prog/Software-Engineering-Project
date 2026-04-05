@@ -1429,9 +1429,14 @@ private void showAddAppointmentDialog() {
         top.add(myBookedSearchField);
 
         JButton cancelBtn = new JButton("Cancel Booking");
-        style(cancelBtn, RED);
+        style(cancelBtn,new Color(255, 140, 0));
         cancelBtn.addActionListener(e -> cancelMyBooking());
         top.add(cancelBtn);
+
+                JButton delBtn = new JButton("Delete Selected");
+        style(delBtn, RED);
+        delBtn.addActionListener(e -> deleteMybooked());
+        top.add(delBtn);
 
         JButton refBtn = new JButton("Refresh");
         style(refBtn, GRAY_BTN);
@@ -1504,7 +1509,7 @@ private void showAddAppointmentDialog() {
                 a.getType().getDisplayName(),
                 a.getProperty().getName(),
                 a.getAppointmentTimeString(),
-                appointment.AppointmentStatus.CONFIRMED
+                a.isExpired() ?  a.getStatus().toString():appointment.AppointmentStatus.CONFIRMED
             });
         }
     }
@@ -1547,7 +1552,7 @@ private void showAddAppointmentDialog() {
             if (a.getStatus() != appointment.AppointmentStatus.AVAILABLE) {
                 msg("This appointment is no longer available."); return;
             }
-            // Enforce type-specific participant cap
+         //In case an error occurs and the completed version is displayed
             String bookingError = a.validateBookingAllowed();
             if (bookingError != null) { msg(bookingError); return; }
             int cap      = a.getEffectiveMaxParticipants();
@@ -1555,6 +1560,7 @@ private void showAddAppointmentDialog() {
             if (bookings >= cap) {
                 msg("This appointment is fully booked!"); return;
             }
+
             if (confirm("Book this appointment?")) {
                 a.addBooking(currentUser);
                 if (a.getBookingCount() >= cap) a.confirm();
@@ -1846,7 +1852,32 @@ private void cancelMyAppointment() {
         }
     }
 
-    // ================================================================
+
+private void deleteMybooked() {
+    int row = myBookedTable.getSelectedRow();
+    if (row < 0) { msg("Please select an appointment first."); return; }
+    String id = (String) myBookedModel.getValueAt(row, 0);
+
+    for (appointment a : appointmentsList) {
+        if (!a.getAppointmentId().equals(id)) continue;
+
+        if (a.getStatus() == appointment.AppointmentStatus.AVAILABLE ||
+            a.getStatus() == appointment.AppointmentStatus.CONFIRMED) {
+            msg("The appointment cannot be deleted until it has been cancelled or been  completed"); return;
+        }
+
+       
+        if (confirm("Remove this appointment from your list?")) {
+            a.removeBooking(currentUser);
+            mangfile.saveToFile(mangfile.FileType.APPOINTMENT, appointmentsList);
+            refreshMyBooked();
+            msg("Appointment removed from your list.");
+        }
+        return;
+    }
+}
+
+// ================================================================
     //  USER PANEL — ADD APPOINTMENT DIALOG
     // ================================================================
     private void showUserAddAppointmentDialog() {
