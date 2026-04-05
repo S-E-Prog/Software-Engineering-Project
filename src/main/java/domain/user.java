@@ -7,7 +7,7 @@ public class user implements Serializable {
 	private final String id;
 	private String name;
 	private String email;
-	private String password;;
+	private String password;
 
 	public user(String id, String name, String email, String password) {
 		this.id = id;
@@ -43,9 +43,8 @@ public class user implements Serializable {
 	public void setPassword(String password) {
 		this.password = password;
 	}
-
 	@Override
 	public String toString() {
-		return "User{id='" + id + "', name='" + name + "', email='" + email + "'}";
+		return "| ID: " + id + " |  | Name: " + name + " |  | Email: " + email + " |";
 	}
 }
