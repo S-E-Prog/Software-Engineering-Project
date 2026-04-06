@@ -28,7 +28,7 @@ public class NotificationTest {
 	        appointmentService.addObserver(mockObserver);
 
 	        testUser = new user("U1", "Sabreen", "sabreen@gmail.com", "1234");
-	        testProperty = new property("P1", "Car", "Nablus", 25000, 10);
+	        testProperty = new property("P1", "Car", "Nablus", 25000.0, 10);
 	        testTime = new time();
 	        testTime.setdate(10, 30);
 	    }
