@@ -2,6 +2,11 @@ package domain;
 
 import java.io.Serializable;
 
+
+/**
+ * Represents a property available for viewing.
+ * @author sabre
+ */
 public class property implements Serializable {
 
 	private final String propertyId;
@@ -11,6 +16,14 @@ public class property implements Serializable {
 	private int maxParticipants;
 	private user owner;
 
+	/**
+	 * @param propertyId
+	 * @param name
+	 * @param address
+	 * @param price
+	 * @param maxViewingCapacity
+	 * @param owner
+	 */
 	public property(String propertyId, String name, String address , double price, int maxViewingCapacity, user owner) {
 		super();
 		this.propertyId = propertyId;

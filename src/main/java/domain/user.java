@@ -2,6 +2,12 @@ package domain;
 
 import java.io.Serializable;
 
+/**
+ * Represents a client user who can book an appointment and add properties and appointments for others to book.
+ * @author sabreen
+ * @version 1.0
+ * 
+ */
 public class user implements Serializable {
 
 	private final String id;
@@ -9,6 +15,12 @@ public class user implements Serializable {
 	private String email;
 	private String password;
 
+	/**
+	 * @param id
+	 * @param name
+	 * @param email
+	 * @param password
+	 */
 	public user(String id, String name, String email, String password) {
 		this.id = id;
 		this.name = name;

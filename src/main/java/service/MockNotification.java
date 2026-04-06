@@ -3,6 +3,11 @@ import domain.user;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * tests for notification system using Mockito.
+ * @author sabre
+ * 
+ */
 public class MockNotification implements NotificationObserver{
 
 	 private List<String> sentMessages = new ArrayList<>();

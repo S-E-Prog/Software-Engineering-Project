@@ -4,6 +4,10 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 
+/**
+ *  Represents a property viewing appointment.
+ *  @author sabre
+ */
 public class appointment implements Serializable {
 
 	private final String appointmentId;
@@ -22,6 +26,9 @@ public class appointment implements Serializable {
 	}
 
 
+	/**
+	 * Enum for appointments types.
+	 */
 	public enum AppointmentType {
 
 		URGENT("Urgent",15,   1,   false ),
@@ -37,6 +44,12 @@ public class appointment implements Serializable {
 		private final int    maxParticipants;
 		private final boolean canBeVirtual;
 
+		/**
+		 * @param displayName
+		 * @param maxDurationMinutes
+		 * @param maxParticipants
+		 * @param canBeVirtual
+		 */
 		AppointmentType(String displayName, int maxDurationMinutes,int maxParticipants, boolean canBeVirtual) {
 			this.displayName                   = displayName;
 			this.maxDurationMinutes            = maxDurationMinutes;
@@ -59,6 +72,11 @@ public class appointment implements Serializable {
 	}
 
 
+	/**
+	 * @param appointmentId
+	 * @param property
+	 * @param appointmentTime
+	 */
 	public appointment(String appointmentId, property property, time appointmentTime) {
 		this(appointmentId, property, appointmentTime, AppointmentType.IN_PERSON);
 	}
@@ -88,68 +106,122 @@ public class appointment implements Serializable {
 		return true;
 	}
 
+	/**
+	 * @param u
+	 * @return remove an appointment 
+	 */
 	public boolean removeBooking(user u) {
 		return bookedBy.removeIf(existing -> existing.getId().equals(u.getId()));
 	}
 
+	/**
+	 * @param u
+	 * @return true if appointment is booked.
+	 */
 	public boolean isBookedBy(user u) {
 		for (user existing : bookedBy)
 			if (existing.getId().equals(u.getId())) return true;
 		return false;
 	}
 
+	/**
+	 * @return the count of participents in an appointment
+	 */
 	public int getBookingCount() {
 		return bookedBy.size();
 	}
 
+	
+	/**
+	 * Cancel this appointment. 
+	 */
 	public void cancel() {
 		this.status = AppointmentStatus.CANCELLED;
 	}
 
+	/**
+	 *  Mark appointment as completed.
+	 */
 	public void complete() {
 		this.status = AppointmentStatus.COMPLETED;
 	}
 
+	/**
+	 * Mark appointment as confirmed.
+	 */
 	public void confirm() {
 		this.status = AppointmentStatus.CONFIRMED;
 	}
 
+	/**
+	 * @return true if appointment is available.
+	 */
 	public boolean isAvailable() {
 		return status == AppointmentStatus.AVAILABLE;
 	}
 
+	/**
+	 * @return true if appointment is confirmed.
+	 */
 	public boolean isConfirmed() {
 		return status == AppointmentStatus.CONFIRMED;
 	}
 
+	/**
+	 * @return true if appointment is expired.
+	 */
 	public boolean isExpired() {
 		return appointmentTime.isend();
 	}
 
+	/**
+	 * @return the appointment time as a string.
+	 */
 	public String getAppointmentTimeString() {
 		return this.appointmentTime.toString() + " to " + this.appointmentTime.toStringendtime();
 	}
 
+	/**
+	 * @return appointment time.
+	 */
 	public time getAppointmentTime() {
 		return this.appointmentTime;
 	}
 
+	/**
+	 * @param appointmentTime 
+	 * sets appointment time.
+	 */
 	public void setAppointmentTime(time appointmentTime) {
 		this.appointmentTime = appointmentTime;
 	}
 
+	/**
+	 * @return the appointment status.
+	 */
 	public AppointmentStatus getStatus() {
 		return status;
 	}
 
+	/**
+	 * @param status
+	 * set the status of the appointment
+	 */
 	public void setStatus(AppointmentStatus status) {
 		this.status = status;
 	}
 
+	/**
+	 * @return the appointment type
+	 */
 	public AppointmentType getType() {
 		return (type == null) ? AppointmentType.IN_PERSON : type;
 	}
 
+	/**
+	 * @param type
+	 * Sets the appointment type
+	 */
 	public void setType(AppointmentType type) {
 		this.type = type;
 	}
@@ -180,14 +252,23 @@ public class appointment implements Serializable {
 		return null;
 	}
 
+	/**
+	 * @return appointment id
+	 */
 	public String getAppointmentId() {
 		return appointmentId;
 	}
 
+	/**
+	 * @return the list of participants of an appointment
+	 */
 	public ArrayList<user> getBookedBy() {
 		return bookedBy;
 	}
 
+	/**
+	 * @return the property
+	 */
 	public property getProperty() {
 		return property;
 	}

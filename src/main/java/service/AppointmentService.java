@@ -9,6 +9,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 
+/**
+ *  Service layer for managing appointments.
+ *  @author sabre
+ */
 public class AppointmentService {
 
     private List<appointment> appointments;
@@ -21,26 +25,13 @@ public class AppointmentService {
     }
 
     /**
-     * Book a new appointment
+     * book a new appointment.
+     * @param id
+     * @param user
+     * @param property
+     * @param time
+     * @return appointment
      */
- /*   public appointment bookAppointment(String id, user user, property property, time time) {
-
-        for (appointment a : appointments) {
-            if (a.getProperty().equals(property) &&
-                    a.getAppointmentTime().equal(time) &&
-                    a.getStatus() == appointment.AppointmentStatus.CONFIRMED) {
-
-                System.out.println("Slot already booked!");
-                return null;
-            }
-        }
-        appointment appointment = new appointment(id, user, property, time);
-        appointments.add(appointment);
-        notifyObservers(user, "Your appointment has been confirmed for " + time.toString());
-
-        return appointment;
-    }
-*/
     public appointment bookAppointment(String id, user user, property property, time time) {
         for (appointment a : appointments) {
             if (a.getProperty().equals(property) &&
@@ -51,10 +42,8 @@ public class AppointmentService {
             }
         }
 
-        // Create appointment without user in constructor
         appointment appointment = new appointment(id, property, time);
         
-        // Add user as a booking
         appointment.addBooking(user);
         
         appointments.add(appointment);
@@ -82,8 +71,11 @@ public class AppointmentService {
         return false;
     }
 
+
     /**
-     * Admin cancel any appointment
+     * @param appointmentId the id of the appointment to cancel.
+     * @param admin the admin cancelling the appointment
+     * @return true if appointment cancelled successfully.
      */
     public boolean adminCancelAppointment(String appointmentId, user admin) {
         for (appointment a : appointments) {
@@ -160,6 +152,9 @@ public class AppointmentService {
     /**
 
      */
+    /**
+     * @return appointment by time.
+     */
     public List<appointment> getAllAppointments() {
         return appointments;
     }
@@ -193,20 +188,34 @@ public class AppointmentService {
         return result;
     }
 
+    /**
+     * @param observer
+     */
     public void addObserver(NotificationObserver observer) {
         observers.add(observer);
     }
 
+    /**
+     * @param observer
+     */
     public void removeObserver(NotificationObserver observer) {
         observers.remove(observer);
     }
 
+    /**
+     * @param arrayList
+     * @param message
+     */
     private void notifyObservers(ArrayList<user> arrayList, String message) {
         for (NotificationObserver observer : observers) {
             observer.update(arrayList, message);
         }
     }
 
+    /**
+     * @param appointmentId
+     * Send reminders for users who booked an appointment.
+     */
     public void sendReminder(String appointmentId) {
         for (appointment a : appointments) {
             if (a.getAppointmentId().equals(appointmentId) &&
