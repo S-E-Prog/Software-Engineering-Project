@@ -9,8 +9,10 @@ public class MockNotification implements NotificationObserver{
 	 
 	 
 	 @Override
-	    public void update(user user, String message) {
-	        sentMessages.add("To: " + user.getName() + " | " + message);
+	 public void update(ArrayList<user> users, String message) {
+	        for (user u : users) {
+	            sentMessages.add("To: " + u.getName() + " | " + message);
+	        }
 	    }
 	 
 	 public List<String> getSentMessages() {

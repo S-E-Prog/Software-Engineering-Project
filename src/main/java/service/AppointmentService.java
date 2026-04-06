@@ -23,7 +23,7 @@ public class AppointmentService {
     /**
      * Book a new appointment
      */
-    public appointment bookAppointment(String id, user user, property property, time time) {
+ /*   public appointment bookAppointment(String id, user user, property property, time time) {
 
         for (appointment a : appointments) {
             if (a.getProperty().equals(property) &&
@@ -40,7 +40,28 @@ public class AppointmentService {
 
         return appointment;
     }
+*/
+    public appointment bookAppointment(String id, user user, property property, time time) {
+        for (appointment a : appointments) {
+            if (a.getProperty().equals(property) &&
+                    a.getAppointmentTime().equal(time) &&
+                    a.getStatus() == appointment.AppointmentStatus.CONFIRMED) {
+                System.out.println("Slot already booked!");
+                return null;
+            }
+        }
 
+        // Create appointment without user in constructor
+        appointment appointment = new appointment(id, property, time);
+        
+        // Add user as a booking
+        appointment.addBooking(user);
+        
+        appointments.add(appointment);
+        notifyObservers(appointment.getBookedBy(),
+                "Your appointment has been confirmed for " + time.toString());
+        return appointment;
+    }
     /**
      * Cancel an appointment by ID
      */
@@ -154,8 +175,8 @@ public class AppointmentService {
                 result.add(a);
             }
         }
-
-
+        return result;
+    }
 
 
     /**
@@ -180,9 +201,9 @@ public class AppointmentService {
         observers.remove(observer);
     }
 
-    private void notifyObservers(user user, String message) {
+    private void notifyObservers(ArrayList<user> arrayList, String message) {
         for (NotificationObserver observer : observers) {
-            observer.update(user, message);
+            observer.update(arrayList, message);
         }
     }
 
