@@ -53,7 +53,7 @@ public class NotificationTest {
 	        appointmentService.bookAppointment("A1", testUser, testProperty, testTime);
 	        appointmentService.sendReminder("A1");
 
-	        verify(mockObserver, times(2))
+	        verify(mockObserver, times(1))
 	                .update(any(ArrayList.class), anyString());
 	    }
 

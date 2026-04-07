@@ -4,6 +4,11 @@ import java.util.*;
 import java.time.*;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
+
+import io.github.cdimascio.dotenv.Dotenv;
+import service.EmailNotification;
+import service.EmailService;
+
 import java.awt.*;
 import java.awt.event.*;
 import java.io.Serializable;
@@ -80,6 +85,7 @@ class InnerGUI extends JFrame implements ActionListener {
     public InnerGUI() {
         loadData();
 
+        
         setTitle("Property Management System");
         setSize(900, 700);
         setDefaultCloseOperation(EXIT_ON_CLOSE);
@@ -1655,50 +1661,50 @@ private void showAddAppointmentDialog() {
 private HashSet<String> notifiedAppointments = new HashSet<>();
 
 private void startReminderChecker() {
+  
+    Dotenv dotenv = Dotenv.load();
+    String username = dotenv.get("EMAIL_USERNAME");
+    String password = dotenv.get("EMAIL_PASSWORD");
+    EmailService emailService = new EmailService(username, password);
+
     ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
-
     scheduler.scheduleAtFixedRate(() -> {
-
         LocalDateTime now = LocalDateTime.now();
 
         for (appointment appt : appointmentsList) {
-
             if (appt.getStatus() == appointment.AppointmentStatus.CANCELLED ||
                 appt.getStatus() == appointment.AppointmentStatus.COMPLETED)
                 continue;
 
             LocalDateTime apptTime = appt.getAppointmentTime().getdatetime();
-            long minutes = Duration.between(now, apptTime).toMinutes();
+            long minutes = Duration.between(now, apptTime).toHours();
 
-            if (minutes >= 0 && minutes <= 5) {
+            if (minutes >= 0 && minutes <= 24) {
+            	for (user u : appt.getBookedBy()) {
+                    String key = appt.getAppointmentId() + "-" + u.getEmail();
+                    if (notifiedAppointments.contains(key)) continue;
+                    notifiedAppointments.add(key);
 
-               
-                for (user u : appt.getBookedBy()) {
+                   
+                    String subject = "Appointment Reminder";
+                    String body = "Dear " + u.getName() + ",\n"
+                        + "Your appointment for " + appt.getProperty().getName()
+                        + " is tomorrow.\n"
+                        + "Time: " + appt.getAppointmentTime()
+                        + "\nBest regards";
 
-                    String notificationKey = appt.getAppointmentId() + "-" + u.getEmail();
+                    emailService.sendEmail(u.getEmail(), subject, body);
 
-                    if (notifiedAppointments.contains(notificationKey))
-                        continue;
-
-                    notifiedAppointments.add(notificationKey);
-
-                    SwingUtilities.invokeLater(() -> {
-                        Toolkit.getDefaultToolkit().beep();
-
-                        JOptionPane.showMessageDialog(null, 
-                            " Reminder!\nYour appointment for :"
-                                + appt.getProperty().getName()
-                                + "\nStarts in less than 5 minutes! :"
-                                + appt.getAppointmentTime()
-                                + "\nFor user: " + u.getEmail(),
+                 
+                   /* SwingUtilities.invokeLater(() ->
+                        JOptionPane.showMessageDialog(null,
+                            "Reminder! Appointment for: " + appt.getProperty().getName()
+                            + "\nStarts in less than 5 minutes!",
                             "Appointment Reminder",
-                            JOptionPane.INFORMATION_MESSAGE
-                        );
-                    });
+                            JOptionPane.INFORMATION_MESSAGE));*/
                 }
             }
         }
-
     }, 0, 30, TimeUnit.SECONDS);
 }
 

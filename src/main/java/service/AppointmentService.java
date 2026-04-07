@@ -206,9 +206,9 @@ public class AppointmentService {
      * @param arrayList
      * @param message
      */
-    private void notifyObservers(ArrayList<user> arrayList, String message) {
+    private void notifyObservers(ArrayList<user> users, String message) {
         for (NotificationObserver observer : observers) {
-            observer.update(arrayList, message);
+            observer.update(users, message);
         }
     }
 
