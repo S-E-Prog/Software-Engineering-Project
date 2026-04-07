@@ -17,16 +17,19 @@ public class AppointmentService {
     public AppointmentService() {
         this.appointments = new ArrayList<>();
         this.observers = new ArrayList<>();
+
     }
 
     /**
      * Book a new appointment
      */
     public appointment bookAppointment(String id, user user, property property, time time) {
+
         for (appointment a : appointments) {
             if (a.getProperty().equals(property) &&
                     a.getAppointmentTime().equal(time) &&
                     a.getStatus() == appointment.AppointmentStatus.CONFIRMED) {
+
                 System.out.println("Slot already booked!");
                 return null;
             }
@@ -34,6 +37,7 @@ public class AppointmentService {
         appointment appointment = new appointment(id, user, property, time);
         appointments.add(appointment);
         notifyObservers(user, "Your appointment has been confirmed for " + time.toString());
+
         return appointment;
     }
 
@@ -63,16 +67,19 @@ public class AppointmentService {
     public boolean adminCancelAppointment(String appointmentId, user admin) {
         for (appointment a : appointments) {
             if (a.getAppointmentId().equals(appointmentId)) {
+
                 if (a.getStatus() == appointment.AppointmentStatus.CANCELLED) {
                     System.out.println("Appointment already cancelled.");
                     return false;
                 }
+
                 a.cancel();
                 notifyObservers(a.getBookedBy(),
                     "Your appointment " + appointmentId + " was cancelled by the administrator.");
                 return true;
             }
         }
+
         System.out.println("Appointment not found.");
         return false;
     }
@@ -81,6 +88,7 @@ public class AppointmentService {
      * Check if a specific slot is available
      */
     public boolean isSlotAvailable(property property, time time) {
+
         for (appointment a : appointments) {
             if (a.getProperty().equals(property) &&
                     a.getAppointmentTime().equal(time) &&
@@ -129,7 +137,7 @@ public class AppointmentService {
     }
 
     /**
-     * Get all appointments
+
      */
     public List<appointment> getAllAppointments() {
         return appointments;
@@ -140,19 +148,22 @@ public class AppointmentService {
      */
     public List<appointment> getAppointmentsByProperty(property property) {
         List<appointment> result = new ArrayList<>();
+
         for (appointment a : appointments) {
             if (a.getProperty().equals(property)) {
                 result.add(a);
             }
         }
-        return result;
-    }
+
+
+
 
     /**
      * Get appointments booked by a specific user
      */
     public List<appointment> getAppointmentsByUser(user user) {
         List<appointment> result = new ArrayList<>();
+
         for (appointment a : appointments) {
             if (a.getBookedBy().equals(user)) {
                 result.add(a);
@@ -186,3 +197,4 @@ public class AppointmentService {
         }
     }
 }
+
