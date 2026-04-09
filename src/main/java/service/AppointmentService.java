@@ -8,10 +8,9 @@ import domain.user;
 import java.util.ArrayList;
 import java.util.List;
 
-
 /**
- *  Service layer for managing appointments.
- *  @author sabre
+ * Service layer for managing appointments.
+ * @author sabre
  */
 public class AppointmentService {
 
@@ -20,39 +19,34 @@ public class AppointmentService {
 
     public AppointmentService() {
         this.appointments = new ArrayList<>();
-        this.observers = new ArrayList<>();
-
+        this.observers    = new ArrayList<>();
     }
 
     /**
-     * book a new appointment.
-     * @param id
-     * @param user
-     * @param property
-     * @param time
-     * @return appointment
+     * Book a new appointment.
      */
     public appointment bookAppointment(String id, user user, property property, time time) {
         for (appointment a : appointments) {
-            if (a.getProperty().equals(property) &&
+            // 🔧 FIX: فحص AVAILABLE و CONFIRMED معاً لمنع الحجز المكرر
+            if (a.getProperty().getPropertyId().equals(property.getPropertyId()) &&
                     a.getAppointmentTime().equal(time) &&
-                    a.getStatus() == appointment.AppointmentStatus.CONFIRMED) {
+                    (a.getStatus() == appointment.AppointmentStatus.CONFIRMED ||
+                            a.getStatus() == appointment.AppointmentStatus.AVAILABLE)) {
                 System.out.println("Slot already booked!");
                 return null;
             }
         }
 
         appointment appointment = new appointment(id, property, time);
-        
         appointment.addBooking(user);
-        
         appointments.add(appointment);
         notifyObservers(appointment.getBookedBy(),
                 "Your appointment has been confirmed for " + time.toString());
         return appointment;
     }
+
     /**
-     * Cancel an appointment by ID
+     * Cancel an appointment by ID.
      */
     public boolean cancelAppointment(String appointmentId) {
         for (appointment a : appointments) {
@@ -62,8 +56,8 @@ public class AppointmentService {
                     return false;
                 }
                 a.cancel();
-                notifyObservers(a.getBookedBy(), 
-                    "Your appointment " + appointmentId + " has been cancelled.");
+                notifyObservers(a.getBookedBy(),
+                        "Your appointment " + appointmentId + " has been cancelled.");
                 return true;
             }
         }
@@ -71,41 +65,36 @@ public class AppointmentService {
         return false;
     }
 
-
     /**
-     * @param appointmentId the id of the appointment to cancel.
-     * @param admin the admin cancelling the appointment
-     * @return true if appointment cancelled successfully.
+     * Admin cancel an appointment by ID.
      */
     public boolean adminCancelAppointment(String appointmentId, user admin) {
         for (appointment a : appointments) {
             if (a.getAppointmentId().equals(appointmentId)) {
-
                 if (a.getStatus() == appointment.AppointmentStatus.CANCELLED) {
                     System.out.println("Appointment already cancelled.");
                     return false;
                 }
-
                 a.cancel();
                 notifyObservers(a.getBookedBy(),
-                    "Your appointment " + appointmentId + " was cancelled by the administrator.");
+                        "Your appointment " + appointmentId + " was cancelled by the administrator.");
                 return true;
             }
         }
-
         System.out.println("Appointment not found.");
         return false;
     }
 
     /**
-     * Check if a specific slot is available
+     * Check if a specific slot is available.
      */
     public boolean isSlotAvailable(property property, time time) {
-
         for (appointment a : appointments) {
-            if (a.getProperty().equals(property) &&
+            // 🔧 FIX: مقارنة بالـ ID بدل equals() الافتراضية
+            if (a.getProperty().getPropertyId().equals(property.getPropertyId()) &&
                     a.getAppointmentTime().equal(time) &&
-                    a.getStatus() == appointment.AppointmentStatus.CONFIRMED) {
+                    (a.getStatus() == appointment.AppointmentStatus.CONFIRMED ||
+                            a.getStatus() == appointment.AppointmentStatus.AVAILABLE)) {
                 return false;
             }
         }
@@ -113,7 +102,7 @@ public class AppointmentService {
     }
 
     /**
-     * Get available slots for a property
+     * Get available slots for a property.
      */
     public List<time> getAvailableSlots(property property, List<time> allSlots) {
         List<time> availableSlots = new ArrayList<>();
@@ -126,13 +115,15 @@ public class AppointmentService {
     }
 
     /**
-     * Modify appointment time
+     * Modify appointment time.
      */
     public boolean modifyAppointment(String appointmentId, time newTime) {
         for (appointment a : appointments) {
             if (a.getAppointmentId().equals(appointmentId)) {
-                if (a.getStatus() != appointment.AppointmentStatus.CONFIRMED) {
-                    System.out.println("Only confirmed appointments can be modified.");
+                // 🔧 FIX: السماح بالتعديل على AVAILABLE و CONFIRMED معاً
+                if (a.getStatus() == appointment.AppointmentStatus.CANCELLED ||
+                        a.getStatus() == appointment.AppointmentStatus.COMPLETED) {
+                    System.out.println("Cannot modify a cancelled or completed appointment.");
                     return false;
                 }
                 if (a.getAppointmentTime().isstart()) {
@@ -141,7 +132,7 @@ public class AppointmentService {
                 }
                 a.setAppointmentTime(newTime);
                 notifyObservers(a.getBookedBy(),
-                    "Your appointment has been modified. New time: " + newTime.toString());
+                        "Your appointment has been modified. New time: " + newTime.toString());
                 return true;
             }
         }
@@ -150,62 +141,48 @@ public class AppointmentService {
     }
 
     /**
-
-     */
-    /**
-     * @return appointment by time.
+     * Get all appointments.
      */
     public List<appointment> getAllAppointments() {
         return appointments;
     }
 
     /**
-     * Get appointments for a specific property
+     * Get appointments for a specific property.
      */
     public List<appointment> getAppointmentsByProperty(property property) {
         List<appointment> result = new ArrayList<>();
-
         for (appointment a : appointments) {
-            if (a.getProperty().equals(property)) {
+            // 🔧 FIX: مقارنة بالـ ID
+            if (a.getProperty().getPropertyId().equals(property.getPropertyId())) {
                 result.add(a);
             }
         }
         return result;
     }
 
-
     /**
-     * Get appointments booked by a specific user
+     * Get appointments booked by a specific user.
      */
     public List<appointment> getAppointmentsByUser(user user) {
         List<appointment> result = new ArrayList<>();
-
         for (appointment a : appointments) {
-            if (a.getBookedBy().equals(user)) {
+            // 🔧 FIX: استخدام isBookedBy() بدل getBookedBy().equals()
+            if (a.isBookedBy(user)) {
                 result.add(a);
             }
         }
         return result;
     }
 
-    /**
-     * @param observer
-     */
     public void addObserver(NotificationObserver observer) {
         observers.add(observer);
     }
 
-    /**
-     * @param observer
-     */
     public void removeObserver(NotificationObserver observer) {
         observers.remove(observer);
     }
 
-    /**
-     * @param arrayList
-     * @param message
-     */
     private void notifyObservers(ArrayList<user> users, String message) {
         for (NotificationObserver observer : observers) {
             observer.update(users, message);
@@ -213,7 +190,6 @@ public class AppointmentService {
     }
 
     /**
-     * @param appointmentId
      * Send reminders for users who booked an appointment.
      */
     public void sendReminder(String appointmentId) {
@@ -221,10 +197,9 @@ public class AppointmentService {
             if (a.getAppointmentId().equals(appointmentId) &&
                     a.getStatus() == appointment.AppointmentStatus.CONFIRMED) {
                 notifyObservers(a.getBookedBy(),
-                    "Reminder: You have an appointment at " + a.getAppointmentTime().toString());
+                        "Reminder: You have an appointment at " + a.getAppointmentTime().toString());
                 return;
             }
         }
     }
 }
-

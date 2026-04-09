@@ -28,7 +28,11 @@ public class user implements Serializable {
 		this.password = password;
 	}
 
-	public String getId() {
+    public user(String number, String ahmad, String id) {
+        this.id = id;
+    }
+
+    public String getId() {
 		return id;
 	}
 

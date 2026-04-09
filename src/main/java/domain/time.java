@@ -13,6 +13,9 @@ public class time implements Serializable {
     private static final DateTimeFormatter dateformat = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm");
     private static final DateTimeFormatter hourformat = DateTimeFormatter.ofPattern("HH:mm");
 
+    public time() {
+    }
+
     public void setdate(int hour, int minute, int... date) {
         LocalDateTime now = LocalDateTime.now();
         int year, month, day;

@@ -1,4 +1,5 @@
-package services;
+package Test;
+
 import domain.*;
 import service.*;
 import java.util.ArrayList;
@@ -8,7 +9,6 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import static org.mockito.Mockito.*;
-import static org.junit.jupiter.api.Assertions.*;
 
 
 public class NotificationTest {
