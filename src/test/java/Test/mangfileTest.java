@@ -7,8 +7,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class mangfileTest {
 
-    // ملاحظة: هذه التيستات تكتب على ملفات حقيقية.
-    // تأكد أن مجلد src/main/java/resources/ موجود قبل التشغيل.
 
     @Test
     void testSaveAndLoadCustomers() {
