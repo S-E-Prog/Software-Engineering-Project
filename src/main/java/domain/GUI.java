@@ -1,70 +1,62 @@
 package domain;
+import service.AppointmentService;
+import service.ConsoleNotification;
 import java.util.concurrent.*;
 import java.util.*;
+import java.util.List;
 import java.time.*;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.event.*;
 import java.io.Serializable;
-import java.util.ArrayList;
 
 public class GUI implements Serializable {
     public static void main(String[] args) {
-         InnerGUI gui = new InnerGUI();
-         gui.setVisible(true);
-   
+        InnerGUI gui = new InnerGUI();
+        gui.setVisible(true);
     }
 }
 
 class InnerGUI extends JFrame implements ActionListener {
 
-    private JPanel mainPanel;
+    // ================================================================
+    //  SERVICE LAYER — single entry point for all business logic
+    // ================================================================
+    private final AppointmentService service = new AppointmentService();
+
+    // ================================================================
+    //  UI FIELDS
+    // ================================================================
+    private JPanel    mainPanel;
     private CardLayout cardLayout;
-    private JPanel dashboardPanel;
+    private JPanel    dashboardPanel;
 
-    ArrayList<user>        customList       = new ArrayList<>();
-    ArrayList<property>    propertiesList   = new ArrayList<>();
-    ArrayList<appointment> appointmentsList = new ArrayList<>();
-
-
-    // --- Login fields ---
+    // --- Login ---
     JTextField     emailField;
     JPasswordField passField;
-    JLabel welcomeLabel = new JLabel("Welcome!", SwingConstants.CENTER);
+    JLabel         welcomeLabel = new JLabel("Welcome!", SwingConstants.CENTER);
 
-    // --- Register fields ---
+    // --- Register ---
     JTextField     nameField, emailRegField;
     JPasswordField passRegField;
 
-    // --- Table models ---
-    JTable             usersTable, propertiesTable, appointmentsTable;
-    DefaultTableModel  usersModel, propertiesModel, appointmentsModel;
+    // --- Admin table models ---
+    JTable            usersTable, propertiesTable, appointmentsTable;
+    DefaultTableModel usersModel, propertiesModel, appointmentsModel;
 
     JComboBox<String> statusFilter;
-    JTextField        searchField;
-    JTextField        propSearchField;
-    JTextField        apptSearchField;
+    JTextField        searchField, propSearchField, apptSearchField;
 
     // --- Current logged-in user ---
     user currentUser = null;
 
-
     // --- User panel table models ---
-    DefaultTableModel availableApptModel;
-    DefaultTableModel myApptModel;       
-    DefaultTableModel myBookedModel;    
-    DefaultTableModel myPropsModel;
-    JTable            availableApptTable;
-    JTable            myApptTable;
-    JTable            myBookedTable;
-    JTable            myPropsTable;
+    DefaultTableModel availableApptModel, myApptModel, myBookedModel, myPropsModel;
+    JTable            availableApptTable, myApptTable, myBookedTable, myPropsTable;
 
     // --- User panel search fields ---
-    JTextField availableApptSearchField;
-    JTextField myApptSearchField;
-    JTextField myBookedSearchField;
-    JTextField myPropSearchField;
+    JTextField availableApptSearchField, myApptSearchField, myBookedSearchField, myPropSearchField;
 
     // --- Color palette ---
     final Color PRIMARY  = new Color(34,  139,  34);
@@ -78,7 +70,7 @@ class InnerGUI extends JFrame implements ActionListener {
     //  CONSTRUCTOR
     // ================================================================
     public InnerGUI() {
-        loadData();
+        service.addObserver(new ConsoleNotification());
 
         setTitle("Property Management System");
         setSize(900, 700);
@@ -94,27 +86,12 @@ class InnerGUI extends JFrame implements ActionListener {
         mainPanel.add(buildUserPanel(),     "user");
 
         add(mainPanel);
-
         startReminderChecker();
-
     }
-
-    /** Centralised data-load so we can call it from anywhere. */
-    @SuppressWarnings("unchecked")
-    private void loadData() {
-        customList       = mangfile.loadFromFile(mangfile.FileType.CUSTOMER);
-        propertiesList   = mangfile.loadFromFile(mangfile.FileType.PROPERTY);
-        appointmentsList = mangfile.loadFromFile(mangfile.FileType.APPOINTMENT);
-
-
-    }
-
 
     // ================================================================
     //  STYLING HELPERS
     // ================================================================
-
-    /** Styles any AbstractButton (JButton). */
     private void style(JButton btn, Color c) {
         btn.setBackground(c);
         btn.setForeground(Color.WHITE);
@@ -123,7 +100,6 @@ class InnerGUI extends JFrame implements ActionListener {
         btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
     }
 
-    /* Styles JTextField and JPasswordField via their shared supertype. */
     private void styleField(JComponent f) {
         f.setBorder(BorderFactory.createCompoundBorder(
             BorderFactory.createLineBorder(Color.GRAY),
@@ -166,8 +142,7 @@ class InnerGUI extends JFrame implements ActionListener {
         passField  = new JPasswordField(20);
         emailField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 35));
         passField .setMaximumSize(new Dimension(Integer.MAX_VALUE, 35));
-        styleField(emailField);
-        styleField(passField);
+        styleField(emailField); styleField(passField);
 
         form.add(boldLabel("Username / Email:")); form.add(emailField);
         form.add(Box.createVerticalStrut(15));
@@ -206,7 +181,6 @@ class InnerGUI extends JFrame implements ActionListener {
         emailRegField = new JTextField();
         passRegField  = new JPasswordField();
 
-       
         for (JComponent f : new JComponent[]{nameField, emailRegField, passRegField}) {
             f.setMaximumSize(new Dimension(Integer.MAX_VALUE, 35));
             styleField(f);
@@ -270,16 +244,13 @@ class InnerGUI extends JFrame implements ActionListener {
         refreshBtn.addActionListener(e -> refreshDashboard());
         topBar.add(refreshBtn);
 
-       
         JPanel content = new JPanel(new GridBagLayout());
         content.setBackground(BG);
         content.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
-        content.setName("dashboardContent");
         updateDashboardContent(content);
 
         JScrollPane scroll = new JScrollPane(content);
         scroll.setBorder(null);
-        scroll.setBackground(BG);
 
         panel.add(topBar, BorderLayout.NORTH);
         panel.add(scroll, BorderLayout.CENTER);
@@ -288,40 +259,32 @@ class InnerGUI extends JFrame implements ActionListener {
 
     private void updateDashboardContent(JPanel content) {
         content.removeAll();
-        loadData();
+        service.loadAll();
+        service.checkAndUpdateAppointmentStatuses();
 
-        int completed = 0, cancelled = 0, confirmed = 0, available = 0;
-        for (appointment a : appointmentsList) {
-            if (a.getStatus() == appointment.AppointmentStatus.COMPLETED) completed++;
-            if (a.getStatus() == appointment.AppointmentStatus.CANCELLED)  cancelled++;
-              if (a.getStatus() == appointment.AppointmentStatus.CONFIRMED) confirmed++;
-              if (a.getStatus() == appointment.AppointmentStatus.AVAILABLE) available++;
-        }
+        int completed = service.countByStatus(appointment.AppointmentStatus.COMPLETED);
+        int cancelled = service.countByStatus(appointment.AppointmentStatus.CANCELLED);
+        int confirmed = service.countByStatus(appointment.AppointmentStatus.CONFIRMED);
+        int available = service.countByStatus(appointment.AppointmentStatus.AVAILABLE);
 
         GridBagConstraints g = new GridBagConstraints();
-        g.fill    = GridBagConstraints.BOTH;
-        g.insets  = new Insets(10, 10, 10, 10);
+        g.fill = GridBagConstraints.BOTH;
+        g.insets = new Insets(10, 10, 10, 10);
         g.weightx = 0.33;
 
-        // Row 0 
         g.gridy = 0;
-        g.gridx = 0; content.add(statCard("Total Users",        String.valueOf(customList.size()),       new Color(52, 152, 219)), g);
-        g.gridx = 1; content.add(statCard("Total Properties",   String.valueOf(propertiesList.size()),   new Color(46, 204, 113)), g);
-        g.gridx = 2; content.add(statCard("Total Appointments", String.valueOf(appointmentsList.size()), new Color(155, 89, 182)), g);
+        g.gridx = 0; content.add(statCard("Total Users",        String.valueOf(service.getAllUsers().size()),        new Color(52, 152, 219)), g);
+        g.gridx = 1; content.add(statCard("Total Properties",   String.valueOf(service.getAllProperties().size()),   new Color(46, 204, 113)), g);
+        g.gridx = 2; content.add(statCard("Total Appointments", String.valueOf(service.getAllAppointments().size()), new Color(155, 89, 182)), g);
 
-        // Row 1 
-        
-         g.gridy = 1;
-         g.gridx = 0; content.add(statCard("Available", String.valueOf(available), new Color(100, 250, 150)), g);
-         g.gridx = 1; content.add(statCard("Confirmed", String.valueOf(confirmed), new Color(240, 204, 50)), g);
-         g.gridx = 2; content.add(statCard("Completed", String.valueOf(completed), new Color(52, 152, 219)), g);
-        
-        // Row 2 
+        g.gridy = 1;
+        g.gridx = 0; content.add(statCard("Available", String.valueOf(available), new Color(100, 250, 150)), g);
+        g.gridx = 1; content.add(statCard("Confirmed", String.valueOf(confirmed), new Color(240, 204, 50)),  g);
+        g.gridx = 2; content.add(statCard("Completed", String.valueOf(completed), new Color(52, 152, 219)),  g);
 
-         g.gridy = 2;
-         g.gridx = 1; content.add(statCard("Cancelled",  String.valueOf(cancelled),  RED), g);
+        g.gridy = 2;
+        g.gridx = 1; content.add(statCard("Cancelled", String.valueOf(cancelled), RED), g);
 
-        // Row 3
         g.gridy = 3; g.gridx = 0; g.gridwidth = 3; g.weighty = 0.5;
         content.add(buildRecentTable(), g);
 
@@ -329,10 +292,8 @@ class InnerGUI extends JFrame implements ActionListener {
         content.repaint();
     }
 
-   
     private void refreshDashboard() {
         if (dashboardPanel == null) return;
-        checkAndUpdateAppointmentStatuses();
         Component center = ((BorderLayout) dashboardPanel.getLayout()).getLayoutComponent(BorderLayout.CENTER);
         if (!(center instanceof JScrollPane)) return;
         Component view = ((JScrollPane) center).getViewport().getView();
@@ -349,8 +310,7 @@ class InnerGUI extends JFrame implements ActionListener {
             BorderFactory.createLineBorder(new Color(200, 200, 200)),
             BorderFactory.createEmptyBorder(15, 15, 15, 15)
         ));
-        JLabel t = new JLabel(title);
-        t.setForeground(Color.GRAY);
+        JLabel t = new JLabel(title); t.setForeground(Color.GRAY);
         JLabel v = new JLabel(value);
         v.setFont(new Font("Arial", Font.BOLD, 28));
         v.setForeground(color);
@@ -370,612 +330,25 @@ class InnerGUI extends JFrame implements ActionListener {
         lbl.setFont(new Font("Arial", Font.BOLD, 16));
         p.add(lbl, BorderLayout.NORTH);
 
-        DefaultTableModel m = new DefaultTableModel(new String[]{"ID", "Type", "Property", "Owner", "Date","Available seats", "Status"}, 0);
+        DefaultTableModel m = new DefaultTableModel(
+            new String[]{"ID", "Type", "Property", "Owner", "Date", "Available seats", "Status"}, 0);
+        ArrayList<appointment> all = service.getAllAppointments();
         int count = 0;
-        for (int i = appointmentsList.size() - 1; i >= 0 && count < 5; i--) {
-            appointment a = appointmentsList.get(i);
+        for (int i = all.size() - 1; i >= 0 && count < 5; i--) {
+            appointment a = all.get(i);
             int slotsLeft = a.getEffectiveMaxParticipants() - a.getBookingCount();
             m.addRow(new Object[]{
-                a.getAppointmentId(),
-                a.getType().getDisplayName(),
+                a.getAppointmentId(), a.getType().getDisplayName(),
                 a.getProperty().getName(),
                 a.getProperty().getOwner() != null ? a.getProperty().getOwner().getName() : "N/A",
-                a.getAppointmentTimeString(),
-                slotsLeft,
-                a.getStatus()
+                a.getAppointmentTimeString(), slotsLeft, a.getStatus()
             });
             count++;
         }
         JTable t = new JTable(m);
-        t.setRowHeight(30);
-        t.setEnabled(false);
+        t.setRowHeight(30); t.setEnabled(false);
         p.add(new JScrollPane(t), BorderLayout.CENTER);
         return p;
-    }
-
-    // ================================================================
-    //  ADD USER DIALOG
-    // ================================================================
-    private void showAddUserDialog() {
-        JDialog dlg = new JDialog(this, "Add New User", true);
-        dlg.setSize(400, 240);
-        dlg.setLocationRelativeTo(this);
-        dlg.setLayout(new BorderLayout());
-
-        JPanel form = new JPanel(new GridBagLayout());
-        form.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
-        GridBagConstraints g = new GridBagConstraints();
-        g.fill   = GridBagConstraints.HORIZONTAL;
-        g.insets = new Insets(6, 6, 6, 6);
-
-        JTextField     tfName  = new JTextField(18);
-        JTextField     tfEmail = new JTextField(18);
-        JPasswordField tfPass  = new JPasswordField(18);
-
-        g.gridx = 0; g.gridy = 0; form.add(new JLabel("Name:"),     g); g.gridx = 1; form.add(tfName,  g);
-        g.gridx = 0; g.gridy = 1; form.add(new JLabel("Email:"),    g); g.gridx = 1; form.add(tfEmail, g);
-        g.gridx = 0; g.gridy = 2; form.add(new JLabel("Password:"), g); g.gridx = 1; form.add(tfPass,  g);
-
-        JPanel btns = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
-        JButton save   = new JButton("Save");
-        JButton cancel = new JButton("Cancel");
-        style(save, PRIMARY); style(cancel, GRAY_BTN);
-
-        save.addActionListener(e -> {
-            String name  = tfName.getText().trim();
-            String email = tfEmail.getText().trim();
-            String pass  = new String(tfPass.getPassword());
-            if (name.isEmpty() || email.isEmpty() || pass.isEmpty()) {
-                msg("Please fill all fields!"); return;
-            }
-              String emailError1 = user.validateEmail(email);
-                if (emailError1 != null) { msg(emailError1); return; }
-            if (pass.length() < 4) {
-                msg("Password must be at least 4 characters!"); return;
-            }
-            for (user u : customList) {
-                if (u.getName().equalsIgnoreCase(name)) {
-                    msg("This name is already registered!"); return;
-                }
-                if (u.getEmail().equalsIgnoreCase(email)) {
-                    msg("This email is already registered!"); return;
-                }
-            }
-            String uid = "USR" + String.format("%03d", customList.size() + 1);
-            customList.add(new user(uid, name, email, pass));
-            mangfile.saveToFile(mangfile.FileType.CUSTOMER, customList);
-            msg("User added successfully!");
-            refreshDashboard();
-            dlg.dispose();
-        });
-        cancel.addActionListener(e -> dlg.dispose());
-
-        btns.add(save); btns.add(cancel);
-        dlg.add(form, BorderLayout.CENTER);
-        dlg.add(btns, BorderLayout.SOUTH);
-        dlg.setVisible(true);
-    }
-
-   // ================================================================
-//  ADD APPOINTMENT DIALOG
-// ================================================================
-private void showAddAppointmentDialog() {
-    loadData();
-    if (propertiesList.isEmpty()) {
-        msg("You need at least one property first."); return;
-    }
-
-    JDialog dlg = new JDialog(this, "Add New Appointment", true);
-    dlg.setSize(480, 420);
-    dlg.setLocationRelativeTo(this);
-    dlg.setLayout(new BorderLayout());
-
-    JPanel form = new JPanel(new GridBagLayout());
-    form.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
-    GridBagConstraints g = new GridBagConstraints();
-    g.fill   = GridBagConstraints.HORIZONTAL;
-    g.insets = new Insets(6, 6, 6, 6);
-
-    String[] propNames = propertiesList.stream().map(property::getName).toArray(String[]::new);
-    user[] owners = propertiesList.stream().map(property::getOwner).toArray(user[]::new);
-
-    JComboBox<String> propCombo = new JComboBox<>(propNames);
-    JLabel ownerLabel = new JLabel(owners[0] != null ? owners[0].getName() : "N/A");
-    propCombo.addActionListener(ev -> {
-        int idx = propCombo.getSelectedIndex();
-        ownerLabel.setText(owners[idx] != null ? owners[idx].getName() : "N/A");
-    });
-
-    String[] typeNames = java.util.Arrays.stream(appointment.AppointmentType.values())
-        .map(appointment.AppointmentType::getDisplayName).toArray(String[]::new);
-    JComboBox<String> typeCombo = new JComboBox<>(typeNames);
-    JLabel rulesLabel = new JLabel( appointment.AppointmentType.values()[0].getRulesSummary());
-    rulesLabel.setForeground(Color.RED);
-    typeCombo.addActionListener(ev -> {
-        appointment.AppointmentType sel = appointment.AppointmentType.values()[typeCombo.getSelectedIndex()];
-        rulesLabel.setText(  sel.getRulesSummary() );
-    });
-
-    JTextField tfDate    = new JTextField(20);
-    JTextField tfTime    = new JTextField(20);
-    JTextField tfEndTime = new JTextField(20);
-    tfDate.setToolTipText("Format: yyyy-MM-dd");
-    tfTime.setToolTipText("Format: HH:mm");
-    tfEndTime.setToolTipText("Duration in minutes (limit depends on type)");
-
-    g.gridx = 0; g.gridy = 0; form.add(new JLabel("Property:"),          g); g.gridx = 1; form.add(propCombo,  g);
-    g.gridx = 0; g.gridy = 1; form.add(new JLabel("Owner:"),             g); g.gridx = 1; form.add(ownerLabel, g);
-    g.gridx = 0; g.gridy = 2; form.add(new JLabel("Type:"),              g); g.gridx = 1; form.add(typeCombo,  g);
-    g.gridx = 0; g.gridy = 3; g.gridwidth = 2;                              form.add(rulesLabel, g); g.gridwidth = 1;
-    g.gridx = 0; g.gridy = 4; form.add(new JLabel("Date (yyyy-MM-dd):"), g); g.gridx = 1; form.add(tfDate,     g);
-    g.gridx = 0; g.gridy = 5; form.add(new JLabel("Time (HH:mm):"),      g); g.gridx = 1; form.add(tfTime,     g);
-    g.gridx = 0; g.gridy = 6; form.add(new JLabel("Duration (mm):"),     g); g.gridx = 1; form.add(tfEndTime,  g);
-
-    JPanel btns = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
-    JButton save   = new JButton("Save");
-    JButton cancel = new JButton("Cancel");
-    style(save, PRIMARY); style(cancel, GRAY_BTN);
-
-    save.addActionListener(e -> {
-        String dateStr    = tfDate.getText().trim();
-        String timeStr    = tfTime.getText().trim();
-        String endTimeStr = tfEndTime.getText().trim();
-        if (dateStr.isEmpty() || timeStr.isEmpty() || endTimeStr.isEmpty()) {
-            msg("Please fill all fields!"); return;
-        }
-        appointment.AppointmentType selType = appointment.AppointmentType.values()[typeCombo.getSelectedIndex()];
-        int endMin;
-        try { endMin = Integer.parseInt(endTimeStr); } catch (NumberFormatException ex) { msg("Duration must be a number."); return; }
-        if (endMin < 1 || endMin > selType.getMaxDurationMinutes()) {
-            msg("Duration for " + selType.getDisplayName() + " must be between 1 and " + selType.getMaxDurationMinutes() + " minutes."); return;
-        }
-
-        String   appId   = "APT" + String.format("%03d", appointmentsList.size() + 1);
-        property selProp = propertiesList.get(propCombo.getSelectedIndex());
-
-        time t = new time();
-        try {
-            String[] dp = dateStr.split("-"); String[] tp = timeStr.split(":");
-            t.setdate(Integer.parseInt(tp[0]), Integer.parseInt(tp[1]),
-                      Integer.parseInt(dp[2]), Integer.parseInt(dp[1]), Integer.parseInt(dp[0]));
-            t.setenddate(endMin);
-        } catch (Exception ex) {
-            msg("Invalid format. Use yyyy-MM-dd and HH:mm"); return;
-        }
-
-        String timeError = appointment.validateAppointmentTime(t.getdatetime(), selType);
-        if (timeError != null) { msg(timeError); return; }
-
-        appointment newApp = new appointment(appId, selProp, t, selType);
-        appointmentsList.add(newApp);
-        mangfile.saveToFile(mangfile.FileType.APPOINTMENT, appointmentsList);
-        msg("Appointment added successfully!");
-        refreshDashboard();
-        dlg.dispose();
-    });
-    cancel.addActionListener(e -> dlg.dispose());
-
-    btns.add(save); btns.add(cancel);
-    dlg.add(form, BorderLayout.CENTER);
-    dlg.add(btns, BorderLayout.SOUTH);
-    dlg.setVisible(true);
-}
-
-    // ================================================================
-    //  ADMIN — EDIT PROPERTY DIALOG
-    // ================================================================
-    private void showEditPropertyDialog() {
-        int row = propertiesTable.getSelectedRow();
-        if (row < 0) { msg("Please select a property first."); return; }
-        String id = (String) propertiesModel.getValueAt(row, 0);
-        property prop = propertiesList.stream().filter(p -> p.getPropertyId().equals(id)).findFirst().orElse(null);
-        if (prop == null) { msg("Property not found!"); return; }
-
-        JDialog dlg = new JDialog(this, "Edit Property", true);
-        dlg.setSize(400, 370);
-        dlg.setLocationRelativeTo(this);
-        dlg.setLayout(new BorderLayout());
-
-        JPanel form = new JPanel(new GridBagLayout());
-        form.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
-        GridBagConstraints g = new GridBagConstraints();
-        g.fill   = GridBagConstraints.HORIZONTAL;
-        g.insets = new Insets(6, 6, 6, 6);
-
-        JTextField tfName  = new JTextField(prop.getName(), 18);
-        JTextField tfAddr  = new JTextField(prop.getAddress(), 18);
-        JTextField tfPrice = new JTextField(String.valueOf(prop.getPrice()), 18);
-        JTextField tfCap   = new JTextField(String.valueOf(prop.getMaxViewingCapacity()), 18);
-
-        String[]    labels = {"Name:", "Address:", "Price:", "Capacity:"};
-        JTextField[] fields = {tfName, tfAddr, tfPrice, tfCap};
-        for (int i = 0; i < fields.length; i++) {
-            g.gridx = 0; g.gridy = i; form.add(new JLabel(labels[i]), g);
-            g.gridx = 1;              form.add(fields[i], g);
-        }
-
-        String[] ownerNames = customList.stream().map(user::getName).toArray(String[]::new);
-        JComboBox<String> ownerCombo = new JComboBox<>(ownerNames);
-        if (prop.getOwner() != null) {
-            for (int i = 0; i < customList.size(); i++)
-                if (customList.get(i).getId().equals(prop.getOwner().getId())) { ownerCombo.setSelectedIndex(i); break; }
-        }
-        g.gridx = 0; g.gridy = 4; form.add(new JLabel("Owner:"), g);
-        g.gridx = 1;              form.add(ownerCombo, g);
-
-        JPanel btns = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
-        JButton save = new JButton("Save"); JButton cancel = new JButton("Cancel");
-        style(save, PRIMARY); style(cancel, GRAY_BTN);
-
-        save.addActionListener(e -> {
-            if (tfName.getText().trim().isEmpty() || tfAddr.getText().trim().isEmpty()) {
-                msg("Name and Address are required!"); return;
-            }
-            try {
-                double price = Double.parseDouble(tfPrice.getText().trim());
-                int    cap   = Integer.parseInt(tfCap.getText().trim());
-                prop.setName(tfName.getText().trim());
-                prop.setAddress(tfAddr.getText().trim());
-                prop.setPrice(price);
-                prop.setMaxViewingCapacity(cap);
-                prop.setOwner(customList.get(ownerCombo.getSelectedIndex()));
-                mangfile.saveToFile(mangfile.FileType.PROPERTY, propertiesList);
-                refreshProperties();
-                msg("Property updated successfully!");
-                dlg.dispose();
-            } catch (NumberFormatException ex) {
-                msg("Price must be a number and Capacity must be a whole number.");
-            }
-        });
-        cancel.addActionListener(e -> dlg.dispose());
-        btns.add(save); btns.add(cancel);
-        dlg.add(form, BorderLayout.CENTER);
-        dlg.add(btns, BorderLayout.SOUTH);
-        dlg.setVisible(true);
-    }
-
-    // ================================================================
-    //  ADMIN — EDIT APPOINTMENT DIALOG
-    // ================================================================
-    private void showEditAppointmentDialog() {
-        int row = appointmentsTable.getSelectedRow();
-        if (row < 0) { msg("Please select an appointment first."); return; }
-        String id = (String) appointmentsModel.getValueAt(row, 0);
-        appointment appt = appointmentsList.stream().filter(a -> a.getAppointmentId().equals(id)).findFirst().orElse(null);
-        if (appt == null) { msg("Appointment not found!"); return; }
-
-        JDialog dlg = new JDialog(this, "Edit Appointment", true);
-        dlg.setSize(480, 380);
-        dlg.setLocationRelativeTo(this);
-        dlg.setLayout(new BorderLayout());
-
-        JPanel form = new JPanel(new GridBagLayout());
-        form.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
-        GridBagConstraints g = new GridBagConstraints();
-        g.fill   = GridBagConstraints.HORIZONTAL;
-        g.insets = new Insets(6, 6, 6, 6);
-
-        time curTime = appt.getAppointmentTime();
-        String curDate = curTime.getdatetime().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd"));
-        String curHM   = curTime.getdatetime().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
-
-        JTextField tfDate    = new JTextField(curDate, 20);
-        JTextField tfTime    = new JTextField(curHM, 20);
-        JTextField tfEndTime = new JTextField("30", 20);
-        tfDate.setToolTipText("Format: yyyy-MM-dd");
-        tfTime.setToolTipText("Format: HH:mm");
-        tfEndTime.setToolTipText("Duration in minutes (limit depends on type)");
-
-        String[] typeNames = java.util.Arrays.stream(appointment.AppointmentType.values())
-            .map(appointment.AppointmentType::getDisplayName).toArray(String[]::new);
-        JComboBox<String> typeCombo = new JComboBox<>(typeNames);
-        typeCombo.setSelectedItem(appt.getType().getDisplayName());
-
-        JLabel rulesLabel = new JLabel(appt.getType().getRulesSummary() );
-        rulesLabel.setForeground(Color.RED);
-        typeCombo.addActionListener(ev -> {
-            appointment.AppointmentType sel = appointment.AppointmentType.values()[typeCombo.getSelectedIndex()];
-            rulesLabel.setText(sel.getRulesSummary());
-        });
-
-        String[] statusNames = {"AVAILABLE", "CONFIRMED", "CANCELLED", "COMPLETED"};
-        JComboBox<String> statusCombo = new JComboBox<>(statusNames);
-        statusCombo.setSelectedItem(appt.getStatus().toString());
-
-        g.gridx = 0; g.gridy = 0; form.add(new JLabel("Type:"),               g); g.gridx = 1; form.add(typeCombo,   g);
-        g.gridx = 0; g.gridy = 1; g.gridwidth = 2;                               form.add(rulesLabel, g); g.gridwidth = 1;
-        g.gridx = 0; g.gridy = 2; form.add(new JLabel("Date (yyyy-MM-dd):"),  g); g.gridx = 1; form.add(tfDate,      g);
-        g.gridx = 0; g.gridy = 3; form.add(new JLabel("Time (HH:mm):"),       g); g.gridx = 1; form.add(tfTime,      g);
-        g.gridx = 0; g.gridy = 4; form.add(new JLabel("Duration (mm):"),      g); g.gridx = 1; form.add(tfEndTime,   g);
-        g.gridx = 0; g.gridy = 5; form.add(new JLabel("Status:"),             g); g.gridx = 1; form.add(statusCombo, g);
-
-        JPanel btns = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
-        JButton save = new JButton("Save"); JButton cancel = new JButton("Cancel");
-        style(save, PRIMARY); style(cancel, GRAY_BTN);
-
-        save.addActionListener(e -> {
-            String dateStr = tfDate.getText().trim();
-            String timeStr = tfTime.getText().trim();
-            String endStr  = tfEndTime.getText().trim();
-            if (dateStr.isEmpty() || timeStr.isEmpty() || endStr.isEmpty()) {
-                msg("Please fill all fields!"); return;
-            }
-            appointment.AppointmentType selType = appointment.AppointmentType.values()[typeCombo.getSelectedIndex()];
-            int endMin;
-            try { endMin = Integer.parseInt(endStr); } catch (NumberFormatException ex) { msg("Duration must be a number."); return; }
-            if (endMin < 1 || endMin > selType.getMaxDurationMinutes()) {
-                msg("Duration for " + selType.getDisplayName() + " must be between 1 and " + selType.getMaxDurationMinutes() + " minutes."); return;
-            }
-            try {
-                String[] dp = dateStr.split("-"); String[] tp = timeStr.split(":");
-                time t = new time();
-                t.setdate(Integer.parseInt(tp[0]), Integer.parseInt(tp[1]),
-                          Integer.parseInt(dp[2]), Integer.parseInt(dp[1]), Integer.parseInt(dp[0]));
-                t.setenddate(endMin);
-                String timeError = appointment.validateAppointmentTime(t.getdatetime(), selType);
-                if (timeError != null) { msg(timeError); return; }
-                appt.setAppointmentTime(t);
-                appt.setType(selType);
-                appt.setStatus(appointment.AppointmentStatus.valueOf((String) statusCombo.getSelectedItem()));
-                mangfile.saveToFile(mangfile.FileType.APPOINTMENT, appointmentsList);
-                refreshAppointments();
-                msg("Appointment updated successfully!");
-                dlg.dispose();
-            } catch (Exception ex) {
-                msg("Invalid format. Use yyyy-MM-dd and HH:mm");
-            }
-        });
-        cancel.addActionListener(e -> dlg.dispose());
-        btns.add(save); btns.add(cancel);
-        dlg.add(form, BorderLayout.CENTER);
-        dlg.add(btns, BorderLayout.SOUTH);
-        dlg.setVisible(true);
-    }
-
-    // ================================================================
-    //  USER — EDIT MY PROPERTY DIALOG
-    // ================================================================
-    private void showUserEditPropertyDialog() {
-        if (currentUser == null) return;
-        int row = myPropsTable.getSelectedRow();
-        if (row < 0) { msg("Please select a property first."); return; }
-        String id = (String) myPropsModel.getValueAt(row, 0);
-        property prop = propertiesList.stream()
-            .filter(p -> p.getPropertyId().equals(id) && p.getOwner() != null && p.getOwner().getId().equals(currentUser.getId()))
-            .findFirst().orElse(null);
-        if (prop == null) { msg("Property not found or not yours!"); return; }
-
-        JDialog dlg = new JDialog(this, "Edit My Property", true);
-        dlg.setSize(400, 300);
-        dlg.setLocationRelativeTo(this);
-        dlg.setLayout(new BorderLayout());
-
-        JPanel form = new JPanel(new GridBagLayout());
-        form.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
-        GridBagConstraints g = new GridBagConstraints();
-        g.fill   = GridBagConstraints.HORIZONTAL;
-        g.insets = new Insets(6, 6, 6, 6);
-
-        JTextField tfName  = new JTextField(prop.getName(), 18);
-        JTextField tfAddr  = new JTextField(prop.getAddress(), 18);
-        JTextField tfPrice = new JTextField(String.valueOf(prop.getPrice()), 18);
-        JTextField tfCap   = new JTextField(String.valueOf(prop.getMaxViewingCapacity()), 18);
-
-        String[] labels = {"Name:", "Address:", "Price:", "Capacity:"};
-        JTextField[] fields = {tfName, tfAddr, tfPrice, tfCap};
-        for (int i = 0; i < fields.length; i++) {
-            g.gridx = 0; g.gridy = i; form.add(new JLabel(labels[i]), g);
-            g.gridx = 1;              form.add(fields[i], g);
-        }
-
-        JPanel btns = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
-        JButton save = new JButton("Save"); JButton cancel = new JButton("Cancel");
-        style(save, PRIMARY); style(cancel, GRAY_BTN);
-
-        save.addActionListener(e -> {
-            if (tfName.getText().trim().isEmpty() || tfAddr.getText().trim().isEmpty()) {
-                msg("Name and Address are required!"); return;
-            }
-            try {
-                double price = Double.parseDouble(tfPrice.getText().trim());
-                int    cap   = Integer.parseInt(tfCap.getText().trim());
-                prop.setName(tfName.getText().trim());
-                prop.setAddress(tfAddr.getText().trim());
-                prop.setPrice(price);
-                prop.setMaxViewingCapacity(cap);
-                mangfile.saveToFile(mangfile.FileType.PROPERTY, propertiesList);
-                refreshMyProps();
-                msg("Property updated successfully!");
-                dlg.dispose();
-            } catch (NumberFormatException ex) {
-                msg("Price must be a number and Capacity must be a whole number.");
-            }
-        });
-        cancel.addActionListener(e -> dlg.dispose());
-        btns.add(save); btns.add(cancel);
-        dlg.add(form, BorderLayout.CENTER);
-        dlg.add(btns, BorderLayout.SOUTH);
-        dlg.setVisible(true);
-    }
-
-    // ================================================================
-    //  USER — EDIT MY APPOINTMENT DIALOG
-    // ================================================================
-    private void showUserEditAppointmentDialog() {
-        if (currentUser == null) return;
-        int row = myApptTable.getSelectedRow();
-        if (row < 0) { msg("Please select an appointment first."); return; }
-        String id = (String) myApptModel.getValueAt(row, 0);
-        appointment appt = appointmentsList.stream()
-            .filter(a -> a.getAppointmentId().equals(id)
-                && a.getProperty().getOwner() != null
-                && a.getProperty().getOwner().getId().equals(currentUser.getId()))
-            .findFirst().orElse(null);
-        if (appt == null) { msg("Appointment not found or not yours!"); return; }
-        if (appt.getStatus() == appointment.AppointmentStatus.CANCELLED ||
-            appt.getStatus() == appointment.AppointmentStatus.COMPLETED) {
-            msg("Cannot edit a cancelled or completed appointment."); return;
-        }
-
-        JDialog dlg = new JDialog(this, "Edit My Appointment", true);
-        dlg.setSize(480, 360);
-        dlg.setLocationRelativeTo(this);
-        dlg.setLayout(new BorderLayout());
-
-        JPanel form = new JPanel(new GridBagLayout());
-        form.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
-        GridBagConstraints g = new GridBagConstraints();
-        g.fill   = GridBagConstraints.HORIZONTAL;
-        g.insets = new Insets(6, 6, 6, 6);
-
-        time curTime = appt.getAppointmentTime();
-        String curDate = curTime.getdatetime().format(java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy"));
-        String curHM   = curTime.getdatetime().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
-
-        JTextField tfDate    = new JTextField(curDate, 20);
-        JTextField tfTime    = new JTextField(curHM, 20);
-        JTextField tfEndTime = new JTextField("30", 20);
-        tfDate.setToolTipText("Format: dd-MM-yyyy");
-        tfTime.setToolTipText("Format: HH:mm");
-        tfEndTime.setToolTipText("Duration in minutes (limit depends on type)");
-
-        String[] typeNames = java.util.Arrays.stream(appointment.AppointmentType.values())
-            .map(appointment.AppointmentType::getDisplayName).toArray(String[]::new);
-        JComboBox<String> typeCombo = new JComboBox<>(typeNames);
-        typeCombo.setSelectedItem(appt.getType().getDisplayName());
-
-        JLabel rulesLabel = new JLabel( appt.getType().getRulesSummary() );
-        rulesLabel.setForeground(Color.RED);
-        typeCombo.addActionListener(ev -> {
-            appointment.AppointmentType sel = appointment.AppointmentType.values()[typeCombo.getSelectedIndex()];
-            rulesLabel.setText( sel.getRulesSummary() );
-        });
-
-        g.gridx = 0; g.gridy = 0; form.add(new JLabel("Type:"),              g); g.gridx = 1; form.add(typeCombo,  g);
-        g.gridx = 0; g.gridy = 1; g.gridwidth = 3;                               form.add(rulesLabel, g); g.gridwidth = 1;
-        g.gridx = 0; g.gridy = 2; form.add(new JLabel("Date (dd-MM-yyyy):"), g); g.gridx = 1; form.add(tfDate,    g);
-        g.gridx = 0; g.gridy = 3; form.add(new JLabel("Time (HH:mm):"),      g); g.gridx = 1; form.add(tfTime,    g);
-        g.gridx = 0; g.gridy = 4; form.add(new JLabel("Duration (mm):"),     g); g.gridx = 1; form.add(tfEndTime, g);
-
-        JPanel btns = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
-        JButton save = new JButton("Save"); JButton cancel = new JButton("Cancel");
-        style(save, PRIMARY); style(cancel, GRAY_BTN);
-
-        save.addActionListener(e -> {
-            String dateStr = tfDate.getText().trim();
-            String timeStr = tfTime.getText().trim();
-            String endStr  = tfEndTime.getText().trim();
-            if (dateStr.isEmpty() || timeStr.isEmpty() || endStr.isEmpty()) {
-                msg("Please fill all fields!"); return;
-            }
-            appointment.AppointmentType selType = appointment.AppointmentType.values()[typeCombo.getSelectedIndex()];
-            int endMin;
-            try { endMin = Integer.parseInt(endStr); } catch (NumberFormatException ex) { msg("Duration must be a number."); return; }
-            if (endMin < 1 || endMin > selType.getMaxDurationMinutes()) {
-                msg("Duration for " + selType.getDisplayName() + " must be between 1 and " + selType.getMaxDurationMinutes() + " minutes."); return;
-            }
-            try {
-                String[] dp = dateStr.split("-"); String[] tp = timeStr.split(":");
-                time t = new time();
-                t.setdate(Integer.parseInt(tp[0]), Integer.parseInt(tp[1]),
-                          Integer.parseInt(dp[2]), Integer.parseInt(dp[1]), Integer.parseInt(dp[0]));
-                t.setenddate(endMin);
-                String timeError = appointment.validateAppointmentTime(t.getdatetime(), selType);
-                if (timeError != null) { msg(timeError); return; }
-                appt.setAppointmentTime(t);
-                appt.setType(selType);
-                mangfile.saveToFile(mangfile.FileType.APPOINTMENT, appointmentsList);
-                refreshMyAppts();
-                refreshAvailableAppts();
-                msg("Appointment updated successfully!");
-                dlg.dispose();
-            } catch (Exception ex) {
-                msg("Invalid format. Use dd-MM-yyyy and HH:mm");
-            }
-        });
-        cancel.addActionListener(e -> dlg.dispose());
-        btns.add(save); btns.add(cancel);
-        dlg.add(form, BorderLayout.CENTER);
-        dlg.add(btns, BorderLayout.SOUTH);
-        dlg.setVisible(true);
-    }
-
-    // ================================================================
-    //  ADD PROPERTY DIALOG
-    // ================================================================
-    
-    private void showAddPropertyDialog() {
-        loadData();
-                if (customList.isEmpty() ) {
-            msg("You need at least one user first."); return;
-        }
-        JDialog dlg = new JDialog(this, "Add Property", true);
-        dlg.setSize(400, 370);
-        dlg.setLocationRelativeTo(this);
-        dlg.setLayout(new BorderLayout());
-
-        JPanel form = new JPanel(new GridBagLayout());
-        form.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
-        GridBagConstraints g = new GridBagConstraints();
-        g.fill   = GridBagConstraints.HORIZONTAL;
-        g.insets = new Insets(6, 6, 6, 6);
-
-        JTextField tfName  = new JTextField(18);
-        JTextField tfAddr  = new JTextField(18);
-        JTextField tfPrice = new JTextField(18);
-        JTextField tfCap   = new JTextField(18);
-
-        String[]    labels = {"Name:", "Address:", "Price:", "Capacity:"};
-        JTextField[] fields = {tfName, tfAddr, tfPrice, tfCap};
-
-        for (int i = 0; i < fields.length; i++) {
-            g.gridx = 0; g.gridy = i; form.add(new JLabel(labels[i]), g);
-            g.gridx = 1;              form.add(fields[i], g);
-        }
-
-   
-        String[] ownerNames = customList.stream().map(user::getName).toArray(String[]::new);
-        JComboBox<String> ownerCombo = new JComboBox<>(ownerNames);
-        g.gridx = 0; g.gridy = fields.length; form.add(new JLabel("Owner:"), g);
-        g.gridx = 1;                           form.add(ownerCombo, g);
-
-        JPanel btns = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
-        JButton save   = new JButton("Save");
-        JButton cancel = new JButton("Cancel");
-        style(save, PRIMARY); style(cancel, GRAY_BTN);
-
-        save.addActionListener(e -> {
-            if (tfName.getText().trim().isEmpty() || tfAddr.getText().trim().isEmpty()) {
-                msg("Name and Address are required!"); return;
-            }
-            if (customList.isEmpty()) {
-                msg("You need at least one user to assign as owner!"); return;
-            }
-            try {
-                double price   = Double.parseDouble(tfPrice.getText().trim());
-                int    cap     = Integer.parseInt(tfCap.getText().trim());
-                user   owner   = customList.get(ownerCombo.getSelectedIndex());
-                String newId   = "P" + String.format("%03d", propertiesList.size() + 1);
-                propertiesList.add(new property(
-                    newId,
-                    tfName.getText().trim(),
-                    tfAddr.getText().trim(),              
-                    price, cap, owner
-                ));
-                mangfile.saveToFile(mangfile.FileType.PROPERTY, propertiesList);
-                refreshProperties();
-                msg("Property added!");
-                dlg.dispose();
-            } catch (NumberFormatException ex) {
-                msg("Price must be a number and Capacity must be a whole number.");
-            }
-        });
-        cancel.addActionListener(e -> dlg.dispose());
-
-        btns.add(save); btns.add(cancel);
-        dlg.add(form, BorderLayout.CENTER);
-        dlg.add(btns, BorderLayout.SOUTH);
-        dlg.setVisible(true);
     }
 
     // ================================================================
@@ -1011,7 +384,7 @@ private void showAddAppointmentDialog() {
         usersModel = new DefaultTableModel(new String[]{"ID", "Name", "Email"}, 0) {
             @Override public boolean isCellEditable(int r, int c) { return false; }
         };
-          usersTable = new JTable(usersModel);
+        usersTable = new JTable(usersModel);
         usersTable.setRowHeight(30);
         usersTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         refreshUsers();
@@ -1023,23 +396,19 @@ private void showAddAppointmentDialog() {
 
     private void refreshUsers() {
         usersModel.setRowCount(0);
-        customList = mangfile.loadFromFile(mangfile.FileType.CUSTOMER);
-        for (user u : customList)
-            usersModel.addRow(new Object[]{
-                u.getId(), u.getName(), u.getEmail()
-            });
+        service.loadAll();
+        for (user u : service.getAllUsers())
+            usersModel.addRow(new Object[]{ u.getId(), u.getName(), u.getEmail() });
     }
 
     private void filterUsers(String kw) {
         usersModel.setRowCount(0);
         String lower = kw.toLowerCase();
-        for (user u : customList)
+        for (user u : service.getAllUsers())
             if (kw.isEmpty()
                     || u.getName().toLowerCase().contains(lower)
                     || u.getEmail().toLowerCase().contains(lower))
-                usersModel.addRow(new Object[]{
-                    u.getId(), u.getName(), u.getEmail()
-                });
+                usersModel.addRow(new Object[]{ u.getId(), u.getName(), u.getEmail() });
     }
 
     private void deleteUser() {
@@ -1047,8 +416,7 @@ private void showAddAppointmentDialog() {
         if (row < 0) { msg("Please select a user first."); return; }
         String id = (String) usersModel.getValueAt(row, 0);
         if (confirm("Delete this user?")) {
-            customList.removeIf(u -> u.getId().equals(id));
-            mangfile.saveToFile(mangfile.FileType.CUSTOMER, customList);
+            service.deleteUser(id);
             refreshUsers();
             msg("User deleted.");
         }
@@ -1074,10 +442,10 @@ private void showAddAppointmentDialog() {
         addBtn.addActionListener(e -> showAddPropertyDialog());
         top.add(addBtn);
 
-        JButton editPropBtn = new JButton("Edit Selected");
-        style(editPropBtn, new Color(255, 140, 0));
-        editPropBtn.addActionListener(e -> showEditPropertyDialog());
-        top.add(editPropBtn);
+        JButton editBtn = new JButton("Edit Selected");
+        style(editBtn, new Color(255, 140, 0));
+        editBtn.addActionListener(e -> showEditPropertyDialog());
+        top.add(editBtn);
 
         JButton delBtn = new JButton("Delete Selected");
         style(delBtn, RED);
@@ -1105,8 +473,8 @@ private void showAddAppointmentDialog() {
 
     private void refreshProperties() {
         propertiesModel.setRowCount(0);
-        propertiesList = mangfile.loadFromFile(mangfile.FileType.PROPERTY);
-        for (property p : propertiesList)
+        service.loadAll();
+        for (property p : service.getAllProperties())
             propertiesModel.addRow(new Object[]{
                 p.getPropertyId(), p.getName(), p.getAddress(),
                 "$" + String.format("%,.0f", p.getPrice()),
@@ -1118,7 +486,7 @@ private void showAddAppointmentDialog() {
     private void filterProperties(String kw) {
         propertiesModel.setRowCount(0);
         String lower = kw.toLowerCase();
-        for (property p : propertiesList)
+        for (property p : service.getAllProperties())
             if (kw.isEmpty()
                     || p.getName().toLowerCase().contains(lower)
                     || p.getAddress().toLowerCase().contains(lower)
@@ -1136,8 +504,7 @@ private void showAddAppointmentDialog() {
         if (row < 0) { msg("Please select a property first."); return; }
         String id = (String) propertiesModel.getValueAt(row, 0);
         if (confirm("Delete this property?")) {
-            propertiesList.removeIf(p -> p.getPropertyId().equals(id));
-            mangfile.saveToFile(mangfile.FileType.PROPERTY, propertiesList);
+            service.deleteProperty(id);
             refreshProperties();
             msg("Property deleted.");
         }
@@ -1156,10 +523,9 @@ private void showAddAppointmentDialog() {
         apptSearchField.addKeyListener(new KeyAdapter() {
             @Override public void keyReleased(KeyEvent e) { filterAppointments(apptSearchField.getText()); }
         });
-        
         top.add(apptSearchField);
         top.add(new JLabel("Filter:"));
-        statusFilter = new JComboBox<>(new String[]{"ALL", "CONFIRMED", "CANCELLED", "COMPLETED"});
+        statusFilter = new JComboBox<>(new String[]{"ALL", "AVAILABLE", "CONFIRMED", "CANCELLED", "COMPLETED"});
         statusFilter.addActionListener(e -> filterAppointments(apptSearchField.getText()));
         top.add(statusFilter);
 
@@ -1168,10 +534,10 @@ private void showAddAppointmentDialog() {
         addBtn.addActionListener(e -> showAddAppointmentDialog());
         top.add(addBtn);
 
-        JButton editApptBtn = new JButton("Edit Selected");
-        style(editApptBtn, new Color(255, 140, 0));
-        editApptBtn.addActionListener(e -> showEditAppointmentDialog());
-        top.add(editApptBtn);
+        JButton editBtn = new JButton("Edit Selected");
+        style(editBtn, new Color(255, 140, 0));
+        editBtn.addActionListener(e -> showEditAppointmentDialog());
+        top.add(editBtn);
 
         JButton delBtn = new JButton("Delete Selected");
         style(delBtn, RED);
@@ -1199,39 +565,33 @@ private void showAddAppointmentDialog() {
 
     private void refreshAppointments() {
         appointmentsModel.setRowCount(0);
-        appointmentsList = mangfile.loadFromFile(mangfile.FileType.APPOINTMENT);
+        service.loadAll();
+        service.checkAndUpdateAppointmentStatuses();
         String filter = (String) statusFilter.getSelectedItem();
-        for (appointment a : appointmentsList) {
+        for (appointment a : service.getAllAppointments()) {
             if (!"ALL".equals(filter) && !a.getStatus().toString().equals(filter)) continue;
             appointmentsModel.addRow(new Object[]{
-                a.getAppointmentId(),
-                a.getType().getDisplayName(),
+                a.getAppointmentId(), a.getType().getDisplayName(),
                 a.getBookingCount() + "/" + a.getEffectiveMaxParticipants() + " booked",
-                a.getProperty().getName(),
-                a.getAppointmentTimeString(),
-                a.getStatus()
+                a.getProperty().getName(), a.getAppointmentTimeString(), a.getStatus()
             });
         }
-         checkAndUpdateAppointmentStatuses();
     }
 
     private void filterAppointments(String kw) {
         appointmentsModel.setRowCount(0);
         String lower  = kw.toLowerCase();
         String filter = (String) statusFilter.getSelectedItem();
-        for (appointment a : appointmentsList) {
+        for (appointment a : service.getAllAppointments()) {
             if (!"ALL".equals(filter) && !a.getStatus().toString().equals(filter)) continue;
             if (!kw.isEmpty()
                     && !a.getProperty().getName().toLowerCase().contains(lower)
                     && !a.getAppointmentId().toLowerCase().contains(lower)
                     && !a.getType().getDisplayName().toLowerCase().contains(lower)) continue;
             appointmentsModel.addRow(new Object[]{
-                a.getAppointmentId(),
-                a.getType().getDisplayName(),
+                a.getAppointmentId(), a.getType().getDisplayName(),
                 a.getBookingCount() + "/" + a.getEffectiveMaxParticipants() + " booked",
-                a.getProperty().getName(),
-                a.getAppointmentTimeString(),
-                a.getStatus()
+                a.getProperty().getName(), a.getAppointmentTimeString(), a.getStatus()
             });
         }
     }
@@ -1241,8 +601,7 @@ private void showAddAppointmentDialog() {
         if (row < 0) { msg("Please select an appointment first."); return; }
         String id = (String) appointmentsModel.getValueAt(row, 0);
         if (confirm("Delete this appointment?")) {
-            appointmentsList.removeIf(a -> a.getAppointmentId().equals(id));
-            mangfile.saveToFile(mangfile.FileType.APPOINTMENT, appointmentsList);
+            service.deleteAppointment(id);
             refreshAppointments();
             msg("Appointment deleted.");
         }
@@ -1255,7 +614,6 @@ private void showAddAppointmentDialog() {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBackground(BG);
 
-       
         JPanel header = new JPanel(new BorderLayout());
         header.setBackground(BLUE);
         header.setBorder(BorderFactory.createEmptyBorder(15, 20, 15, 20));
@@ -1296,9 +654,8 @@ private void showAddAppointmentDialog() {
         top.add(availableApptSearchField);
         JButton bookBtn = new JButton("Book Selected");
         style(bookBtn, PRIMARY);
-        bookBtn.addActionListener(e -> bookAppointment());
+        bookBtn.addActionListener(e -> bookAppointmentAction());
         top.add(bookBtn);
-
         JButton refBtn = new JButton("Refresh");
         style(refBtn, GRAY_BTN);
         refBtn.addActionListener(e -> { refreshAvailableAppts(); availableApptSearchField.setText(""); });
@@ -1308,7 +665,6 @@ private void showAddAppointmentDialog() {
             new String[]{"ID", "Type", "Property", "Owner", "Date & Time", "Available seats"}, 0) {
             @Override public boolean isCellEditable(int r, int c) { return false; }
         };
-        
         availableApptTable = new JTable(availableApptModel);
         availableApptTable.setRowHeight(30);
         availableApptTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
@@ -1319,6 +675,45 @@ private void showAddAppointmentDialog() {
         return panel;
     }
 
+    private JPanel buildMybookedTab() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        top.add(new JLabel("Search:"));
+        myBookedSearchField = new JTextField(15);
+        myBookedSearchField.addKeyListener(new KeyAdapter() {
+            @Override public void keyReleased(KeyEvent e) { filterMyBooked(myBookedSearchField.getText()); }
+        });
+        top.add(myBookedSearchField);
+
+        JButton cancelBtn = new JButton("Cancel Booking");
+        style(cancelBtn, new Color(255, 140, 0));
+        cancelBtn.addActionListener(e -> cancelMyBookingAction());
+        top.add(cancelBtn);
+
+        JButton delBtn = new JButton("Delete Selected");
+        style(delBtn, RED);
+        delBtn.addActionListener(e -> deleteMybooked());
+        top.add(delBtn);
+
+        JButton refBtn = new JButton("Refresh");
+        style(refBtn, GRAY_BTN);
+        refBtn.addActionListener(e -> { refreshMyBooked(); myBookedSearchField.setText(""); });
+        top.add(refBtn);
+
+        myBookedModel = new DefaultTableModel(
+            new String[]{"ID", "Type", "Property", "Date & Time", "Status"}, 0) {
+            @Override public boolean isCellEditable(int r, int c) { return false; }
+        };
+        myBookedTable = new JTable(myBookedModel);
+        myBookedTable.setRowHeight(30);
+        myBookedTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+
+        panel.add(top, BorderLayout.NORTH);
+        panel.add(new JScrollPane(myBookedTable), BorderLayout.CENTER);
+        return panel;
+    }
 
     private JPanel buildMyApptTab() {
         JPanel panel = new JPanel(new BorderLayout());
@@ -1337,21 +732,19 @@ private void showAddAppointmentDialog() {
         addApptBtn.addActionListener(e -> showUserAddAppointmentDialog());
         top.add(addApptBtn);
 
-        JButton editMyApptBtn = new JButton("Edit Selected");
-        style(editMyApptBtn, new Color(255, 140, 0));
-        editMyApptBtn.addActionListener(e -> showUserEditAppointmentDialog());
-        top.add(editMyApptBtn);
-            
-    JButton cancelBtn = new JButton("Cancel Appointment");
-     style(cancelBtn, RED);
+        JButton editBtn = new JButton("Edit Selected");
+        style(editBtn, new Color(255, 140, 0));
+        editBtn.addActionListener(e -> showUserEditAppointmentDialog());
+        top.add(editBtn);
 
-      cancelBtn.addActionListener(e -> cancelMyAppointment());
-
-       top.add(cancelBtn);
+        JButton cancelBtn = new JButton("Cancel Appointment");
+        style(cancelBtn, RED);
+        cancelBtn.addActionListener(e -> cancelMyAppointmentAction());
+        top.add(cancelBtn);
 
         JButton delBtn = new JButton("Delete Selected");
         style(delBtn, RED);
-        delBtn.addActionListener(e -> deleteMyAppointment());
+        delBtn.addActionListener(e -> deleteMyAppointmentAction());
         top.add(delBtn);
 
         JButton refBtn = new JButton("Refresh");
@@ -1372,7 +765,6 @@ private void showAddAppointmentDialog() {
         return panel;
     }
 
-
     private JPanel buildMyPropsTab() {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
@@ -1390,10 +782,10 @@ private void showAddAppointmentDialog() {
         addPropBtn.addActionListener(e -> showUserAddPropertyDialog());
         top.add(addPropBtn);
 
-        JButton editMyPropBtn = new JButton("Edit Selected");
-        style(editMyPropBtn, new Color(255, 140, 0));
-        editMyPropBtn.addActionListener(e -> showUserEditPropertyDialog());
-        top.add(editMyPropBtn);
+        JButton editBtn = new JButton("Edit Selected");
+        style(editBtn, new Color(255, 140, 0));
+        editBtn.addActionListener(e -> showUserEditPropertyDialog());
+        top.add(editBtn);
 
         JButton delBtn = new JButton("Delete Selected");
         style(delBtn, RED);
@@ -1418,64 +810,20 @@ private void showAddAppointmentDialog() {
         return panel;
     }
 
-    private JPanel buildMybookedTab() {
-        JPanel panel = new JPanel(new BorderLayout());
-        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-
-        JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        top.add(new JLabel("Search:"));
-        myBookedSearchField = new JTextField(15);
-        myBookedSearchField.addKeyListener(new KeyAdapter() {
-            @Override public void keyReleased(KeyEvent e) { filterMyBooked(myBookedSearchField.getText()); }
-        });
-        top.add(myBookedSearchField);
-
-        JButton cancelBtn = new JButton("Cancel Booking");
-        style(cancelBtn,new Color(255, 140, 0));
-        cancelBtn.addActionListener(e -> cancelMyBooking());
-        top.add(cancelBtn);
-
-                JButton delBtn = new JButton("Delete Selected");
-        style(delBtn, RED);
-        delBtn.addActionListener(e -> deleteMybooked());
-        top.add(delBtn);
-
-        JButton refBtn = new JButton("Refresh");
-        style(refBtn, GRAY_BTN);
-        refBtn.addActionListener(e -> { refreshMyBooked(); myBookedSearchField.setText(""); });
-        top.add(refBtn);
-
-        myBookedModel = new DefaultTableModel(
-            new String[]{"ID", "Type", "Property", "Date & Time", "Status"}, 0) {
-            @Override public boolean isCellEditable(int r, int c) { return false; }
-        };
-        myBookedTable = new JTable(myBookedModel);
-        myBookedTable.setRowHeight(30);
-        myBookedTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-
-        panel.add(top, BorderLayout.NORTH);
-        panel.add(new JScrollPane(myBookedTable), BorderLayout.CENTER);
-        return panel;
-    }
- 
     // ================================================================
-    //  USER PANEL — REFRESH METHODS
+    //  USER PANEL — REFRESH METHODS 
     // ================================================================
     private void refreshAvailableAppts() {
         availableApptModel.setRowCount(0);
-        loadData();
-        checkAndUpdateAppointmentStatuses();
-        for (appointment a : appointmentsList) {
-            if (a.getStatus() != appointment.AppointmentStatus.AVAILABLE) continue;
-            if (currentUser != null && a.isBookedBy(currentUser)) continue;
+        service.loadAll();
+        service.checkAndUpdateAppointmentStatuses();
+        for (appointment a : service.getAvailableAppointmentsFor(currentUser)) {
             int slotsLeft = a.getEffectiveMaxParticipants() - a.getBookingCount();
             availableApptModel.addRow(new Object[]{
-                a.getAppointmentId(),
-                a.getType().getDisplayName(),
+                a.getAppointmentId(), a.getType().getDisplayName(),
                 a.getProperty().getName(),
                 a.getProperty().getOwner() != null ? a.getProperty().getOwner().getName() : "N/A",
-                a.getAppointmentTimeString(),
-                slotsLeft
+                a.getAppointmentTimeString(), slotsLeft
             });
         }
     }
@@ -1483,255 +831,56 @@ private void showAddAppointmentDialog() {
     private void refreshMyAppts() {
         myApptModel.setRowCount(0);
         if (currentUser == null) return;
-        loadData();
-      checkAndUpdateAppointmentStatuses();
-        for (appointment a : appointmentsList) {
-            if (a.getProperty().getOwner() != null
-                    && a.getProperty().getOwner().getId().equals(currentUser.getId())) {
-                myApptModel.addRow(new Object[]{
-                    a.getAppointmentId(),
-                    a.getType().getDisplayName(),
-                    a.getProperty().getName(),
-                    a.getAppointmentTimeString(),
-                    a.getStatus()
-                });
-            }
-        }
+        service.loadAll();
+        service.checkAndUpdateAppointmentStatuses();
+        for (appointment a : service.getAppointmentsByOwner(currentUser))
+            myApptModel.addRow(new Object[]{
+                a.getAppointmentId(), a.getType().getDisplayName(),
+                a.getProperty().getName(), a.getAppointmentTimeString(), a.getStatus()
+            });
     }
 
     private void refreshMyBooked() {
         myBookedModel.setRowCount(0);
         if (currentUser == null) return;
-        loadData();
-         checkAndUpdateAppointmentStatuses();
-        for (appointment a : appointmentsList) {
-            if (!a.isBookedBy(currentUser)) continue;
+        service.loadAll();
+        service.checkAndUpdateAppointmentStatuses();
+        for (appointment a : service.getBookedByUser(currentUser))
             myBookedModel.addRow(new Object[]{
-                a.getAppointmentId(),
-                a.getType().getDisplayName(),
-                a.getProperty().getName(),
-                a.getAppointmentTimeString(),
-                a.isExpired() ?  a.getStatus().toString():appointment.AppointmentStatus.CONFIRMED
+                a.getAppointmentId(), a.getType().getDisplayName(),
+                a.getProperty().getName(), a.getAppointmentTimeString(),
+                a.getStatus()
             });
-        }
     }
 
     private void refreshMyProps() {
         myPropsModel.setRowCount(0);
         if (currentUser == null) return;
-        loadData();
-        for (property p : propertiesList) {
-            if (p.getOwner() != null && p.getOwner().getId().equals(currentUser.getId())) {
-                myPropsModel.addRow(new Object[]{
-                    p.getPropertyId(), p.getName(), p.getAddress(),
-                    "$" + String.format("%,.0f", p.getPrice()),
-                    p.getMaxViewingCapacity()
-                });
-            }
-        }
-    }
-
-    private int countBookings(String apptId) {
-        for (appointment a : appointmentsList)
-            if (a.getAppointmentId().equals(apptId)) return a.getBookingCount();
-        return 0;
+        service.loadAll();
+        for (property p : service.getPropertiesByOwner(currentUser))
+            myPropsModel.addRow(new Object[]{
+                p.getPropertyId(), p.getName(), p.getAddress(),
+                "$" + String.format("%,.0f", p.getPrice()), p.getMaxViewingCapacity()
+            });
     }
 
     // ================================================================
-    //  USER PANEL — ACTIONS
-    // ================================================================
-
-    private void bookAppointment() {
-        int row = availableApptTable.getSelectedRow();
-        if (row < 0) { msg("Please select an appointment to book."); return; }
-        String id = (String) availableApptModel.getValueAt(row, 0);
-
-        for (appointment a : appointmentsList) {
-            if (!a.getAppointmentId().equals(id)) continue;
-            if (a.isBookedBy(currentUser)) {
-                msg("You already booked this appointment!"); return;
-            }
-            if (a.getStatus() != appointment.AppointmentStatus.AVAILABLE) {
-                msg("This appointment is no longer available."); return;
-            }
-         //In case an error occurs and the completed version is displayed
-            String bookingError = a.validateBookingAllowed();
-            if (bookingError != null) { msg(bookingError); return; }
-            int cap      = a.getEffectiveMaxParticipants();
-            int bookings = a.getBookingCount();
-            if (bookings >= cap) {
-                msg("This appointment is fully booked!"); return;
-            }
-
-            if (confirm("Book this appointment?")) {
-                a.addBooking(currentUser);
-                if (a.getBookingCount() >= cap) a.confirm();
-                mangfile.saveToFile(mangfile.FileType.APPOINTMENT, appointmentsList);
-                msg("Appointment booked successfully!");
-                refreshAvailableAppts();
-                refreshMyBooked();
-            }
-            return;
-        }
-    }
-
-    private void cancelMyBooking() {
-        int row = myBookedTable.getSelectedRow();
-        if (row < 0) { msg("Please select an appointment to cancel."); return; }
-        String id = (String) myBookedModel.getValueAt(row, 0);
-
-        for (appointment a : appointmentsList) {
-            if (!a.getAppointmentId().equals(id)) continue;
-            if (a.getStatus() == appointment.AppointmentStatus.COMPLETED
-                    || a.getStatus() == appointment.AppointmentStatus.CANCELLED) {
-                msg("Cannot cancel a completed or already cancelled appointment."); return;
-            }
-            if (confirm("Cancel this booking? It will become available again.")) {
-                a.removeBooking(currentUser);
-                if (a.getBookingCount() == 0) a.setStatus(appointment.AppointmentStatus.AVAILABLE);
-                mangfile.saveToFile(mangfile.FileType.APPOINTMENT, appointmentsList);
-                msg("Booking cancelled. Appointment is now available.");
-                refreshMyBooked();
-                refreshAvailableAppts();
-            }
-            return;
-        }
-    }
-
-    private void checkAndUpdateAppointmentStatuses() {
-        boolean changed = false;
-        for (appointment a : appointmentsList) {
-            if (a.getStatus() == appointment.AppointmentStatus.CANCELLED
-                    || a.getStatus() == appointment.AppointmentStatus.COMPLETED) continue;
-
-          
-            if (a.getStatus() == appointment.AppointmentStatus.CONFIRMED && a.isExpired()) {
-                a.complete();
-                changed = true;
-            }
-
-              if (a.getStatus() == appointment.AppointmentStatus.AVAILABLE && a.isExpired() && a.getBookingCount() <= 0) {
-                a.cancel();
-                changed = true;
-                continue;
-            }
-         
-          else  if (a.getStatus() == appointment.AppointmentStatus.AVAILABLE && a.isExpired()) {
-                a.complete();
-                changed = true;
-                continue;
-            }
-
-            int cap = a.getEffectiveMaxParticipants();
-            if (a.getStatus() == appointment.AppointmentStatus.AVAILABLE
-                    && countBookings(a.getAppointmentId()) >= cap) {
-                a.confirm();
-                changed = true;
-            }
-        }
-        if (changed) mangfile.saveToFile(mangfile.FileType.APPOINTMENT, appointmentsList);
-    }
-
-    private void startStatusChecker() {
-        Thread checker = new Thread(() -> {
-            while (currentUser != null) {
-                try { Thread.sleep(60000); } catch (InterruptedException ex) { break; }
-                SwingUtilities.invokeLater(() -> {
-                    if (currentUser == null) return;
-                    loadData();
-                    checkAndUpdateAppointmentStatuses();
-                    if (availableApptModel != null) refreshAvailableAppts();
-                    if (myApptModel       != null) refreshMyAppts();
-                    if (myBookedModel     != null) refreshMyBooked();
-                });
-            }
-        });
-        checker.setDaemon(true);
-        checker.start();
-    }
-
-//=============================================================
-//Sending alerts and messages to users↓↓↓↓↓↓↓↓↓
-//=============================================================
-
-private HashSet<String> notifiedAppointments = new HashSet<>();
-
-private void startReminderChecker() {
-    ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
-
-    scheduler.scheduleAtFixedRate(() -> {
-
-        LocalDateTime now = LocalDateTime.now();
-
-        for (appointment appt : appointmentsList) {
-
-            if (appt.getStatus() == appointment.AppointmentStatus.CANCELLED ||
-                appt.getStatus() == appointment.AppointmentStatus.COMPLETED)
-                continue;
-
-            LocalDateTime apptTime = appt.getAppointmentTime().getdatetime();
-            long minutes = Duration.between(now, apptTime).toMinutes();
-
-            if (minutes >= 0 && minutes <= 5) {
-
-               
-                for (user u : appt.getBookedBy()) {
-
-                    String notificationKey = appt.getAppointmentId() + "-" + u.getEmail();
-
-                    if (notifiedAppointments.contains(notificationKey))
-                        continue;
-
-                    notifiedAppointments.add(notificationKey);
-
-                    SwingUtilities.invokeLater(() -> {
-
-                        Toolkit.getDefaultToolkit().beep();
-
-                        JOptionPane.showMessageDialog(null, 
-                            " Reminder!\nYour appointment for :"
-                                + appt.getProperty().getName()
-                                + "\nStarts in less than 5 minutes! :"
-                                + appt.getAppointmentTime()
-                                + "\nFor user: " + u.getEmail(),
-                            "Appointment Reminder",
-                            JOptionPane.INFORMATION_MESSAGE
-                        );
-
-                        
-                    });
-                }
-            }
-        }
-
-    }, 0, 30, TimeUnit.SECONDS);
-}
-
-//================================================================
-//Sending alerts and messages to users↑↑↑↑↑↑↑↑↑
-//================================================================
-
-    // ================================================================
-    //  USER PANEL — FILTER METHODS
+    //  USER PANEL — FILTER METHODS 
     // ================================================================
     private void filterAvailableAppts(String kw) {
         availableApptModel.setRowCount(0);
         String lower = kw.toLowerCase();
-        for (appointment a : appointmentsList) {
-            if (a.getStatus() != appointment.AppointmentStatus.AVAILABLE) continue;
-            if (currentUser != null && a.isBookedBy(currentUser)) continue;
+        for (appointment a : service.getAvailableAppointmentsFor(currentUser)) {
             if (!kw.isEmpty()
                     && !a.getProperty().getName().toLowerCase().contains(lower)
                     && !a.getAppointmentId().toLowerCase().contains(lower)
                     && !a.getType().getDisplayName().toLowerCase().contains(lower)) continue;
             int slotsLeft = a.getEffectiveMaxParticipants() - a.getBookingCount();
             availableApptModel.addRow(new Object[]{
-                a.getAppointmentId(),
-                a.getType().getDisplayName(),
+                a.getAppointmentId(), a.getType().getDisplayName(),
                 a.getProperty().getName(),
                 a.getProperty().getOwner() != null ? a.getProperty().getOwner().getName() : "N/A",
-                a.getAppointmentTimeString(),
-                slotsLeft
+                a.getAppointmentTimeString(), slotsLeft
             });
         }
     }
@@ -1740,9 +889,7 @@ private void startReminderChecker() {
         myApptModel.setRowCount(0);
         if (currentUser == null) return;
         String lower = kw.toLowerCase();
-        for (appointment a : appointmentsList) {
-            if (a.getProperty().getOwner() == null
-                    || !a.getProperty().getOwner().getId().equals(currentUser.getId())) continue;
+        for (appointment a : service.getAppointmentsByOwner(currentUser)) {
             if (!kw.isEmpty()
                     && !a.getProperty().getName().toLowerCase().contains(lower)
                     && !a.getAppointmentId().toLowerCase().contains(lower)
@@ -1758,8 +905,7 @@ private void startReminderChecker() {
         myBookedModel.setRowCount(0);
         if (currentUser == null) return;
         String lower = kw.toLowerCase();
-        for (appointment a : appointmentsList) {
-            if (!a.isBookedBy(currentUser)) continue;
+        for (appointment a : service.getBookedByUser(currentUser)) {
             if (!kw.isEmpty()
                     && !a.getProperty().getName().toLowerCase().contains(lower)
                     && !a.getAppointmentId().toLowerCase().contains(lower)
@@ -1775,8 +921,7 @@ private void startReminderChecker() {
         myPropsModel.setRowCount(0);
         if (currentUser == null) return;
         String lower = kw.toLowerCase();
-        for (property p : propertiesList) {
-            if (p.getOwner() == null || !p.getOwner().getId().equals(currentUser.getId())) continue;
+        for (property p : service.getPropertiesByOwner(currentUser)) {
             if (!kw.isEmpty()
                     && !p.getName().toLowerCase().contains(lower)
                     && !p.getAddress().toLowerCase().contains(lower)) continue;
@@ -1787,127 +932,494 @@ private void startReminderChecker() {
         }
     }
 
-   
-private void cancelMyAppointment() {
-    int row = myApptTable.getSelectedRow();
-
-    if (row < 0) {
-        msg("Please select an appointment first.");
-        return;
+    // ================================================================
+    //  USER PANEL — ACTIONS (call service, then refresh display)
+    // ================================================================
+    private void bookAppointmentAction() {
+        int row = availableApptTable.getSelectedRow();
+        if (row < 0) { msg("Please select an appointment to book."); return; }
+        String id = (String) availableApptModel.getValueAt(row, 0);
+        if (!confirm("Book this appointment?")) return;
+        String error = service.bookAppointment(id, currentUser);
+        if (error != null) { msg(error); return; }
+        msg("Appointment booked successfully!");
+        refreshAvailableAppts();
+        refreshMyBooked();
     }
 
-    String id = (String) myApptModel.getValueAt(row, 0);
-
-    for (appointment a : appointmentsList) {
-        if (a.getAppointmentId().equals(id)) {
-
-            if (a.getStatus() == appointment.AppointmentStatus.CANCELLED) {
-                msg("This appointment is already cancelled.");
-                return;
-            }
-
-            if (a.getStatus() == appointment.AppointmentStatus.COMPLETED) {
-                msg("You cannot cancel a completed appointment.");
-                return;
-            }
-
-            a.setStatus(appointment.AppointmentStatus.CANCELLED);
-
-            mangfile.saveToFile(mangfile.FileType.APPOINTMENT, appointmentsList);
-
-            msg("Appointment cancelled successfully!");
-            refreshMyAppts();
-            refreshAvailableAppts();   
-            return;
-        }
+    private void cancelMyBookingAction() {
+        int row = myBookedTable.getSelectedRow();
+        if (row < 0) { msg("Please select an appointment to cancel."); return; }
+        String id = (String) myBookedModel.getValueAt(row, 0);
+        if (!confirm("Cancel this booking? It will become available again.")) return;
+        String error = service.cancelMyBooking(id, currentUser);
+        if (error != null) { msg(error); return; }
+        msg("Booking cancelled. Appointment is now available.");
+        refreshMyBooked();
+        refreshAvailableAppts();
     }
-}
 
-    private void deleteMyAppointment() {
+    private void deleteMybooked() {
+        int row = myBookedTable.getSelectedRow();
+        if (row < 0) { msg("Please select an appointment first."); return; }
+        String id = (String) myBookedModel.getValueAt(row, 0);
+        // 1. Validate first (no deletion yet)
+        String validationError = service.validateRemoveFromBooked(id);
+        if (validationError != null) { msg(validationError); return; }
+        // 2. Ask user to confirm
+        if (!confirm("Remove this appointment from your list?")) return;
+        // 3. Now actually delete
+        String error = service.removeFromMyBooked(id, currentUser);
+        if (error != null) { msg(error); return; }
+        msg("Appointment removed from your list.");
+        refreshMyBooked();
+    }
+
+    private void cancelMyAppointmentAction() {
         int row = myApptTable.getSelectedRow();
         if (row < 0) { msg("Please select an appointment first."); return; }
         String id = (String) myApptModel.getValueAt(row, 0);
-
-        for (appointment a : appointmentsList) {
-            if (!a.getAppointmentId().equals(id)) continue;
-            if (a.getStatus() == appointment.AppointmentStatus.CONFIRMED) {
-                msg("Cannot delete a confirmed appointment. Cancel it first."); return;
-            }
-            break;
-        }
-        if (confirm("Delete this appointment?")) {
-            appointmentsList.removeIf(a -> a.getAppointmentId().equals(id));
-            mangfile.saveToFile(mangfile.FileType.APPOINTMENT, appointmentsList);
-            refreshMyAppts();
-            refreshAvailableAppts();
-            msg("Appointment deleted.");
-        }
+        String error = service.ownerCancelAppointment(id, currentUser);
+        if (error != null) { msg(error); return; }
+        msg("Appointment cancelled successfully!");
+        refreshMyAppts();
+        refreshAvailableAppts();
     }
 
-  
+    private void deleteMyAppointmentAction() {
+        int row = myApptTable.getSelectedRow();
+        if (row < 0) { msg("Please select an appointment first."); return; }
+        String id = (String) myApptModel.getValueAt(row, 0);
+        // 1. Validate first (no deletion yet)
+        String validationError = service.validateOwnerDelete(id, currentUser);
+        if (validationError != null) { msg(validationError); return; }
+        // 2. Ask user to confirm
+        if (!confirm("Delete this appointment?")) return;
+        // 3. Now actually delete
+        String error = service.ownerDeleteAppointment(id, currentUser);
+        if (error != null) { msg(error); return; }
+        msg("Appointment deleted.");
+        refreshMyAppts();
+        refreshAvailableAppts();
+    }
+
     private void deleteMyProperty() {
         int row = myPropsTable.getSelectedRow();
         if (row < 0) { msg("Please select a property first."); return; }
         String id = (String) myPropsModel.getValueAt(row, 0);
         if (confirm("Delete this property?")) {
-            propertiesList.removeIf(p -> p.getPropertyId().equals(id));
-            mangfile.saveToFile(mangfile.FileType.PROPERTY, propertiesList);
+            service.deleteProperty(id);
             refreshMyProps();
             msg("Property deleted.");
         }
     }
 
-
-private void deleteMybooked() {
-    int row = myBookedTable.getSelectedRow();
-    if (row < 0) { msg("Please select an appointment first."); return; }
-    String id = (String) myBookedModel.getValueAt(row, 0);
-
-    for (appointment a : appointmentsList) {
-        if (!a.getAppointmentId().equals(id)) continue;
-
-        if (a.getStatus() == appointment.AppointmentStatus.AVAILABLE ||
-            a.getStatus() == appointment.AppointmentStatus.CONFIRMED) {
-            msg("The appointment cannot be deleted until it has been cancelled or been  completed"); return;
-        }
-
-       
-        if (confirm("Remove this appointment from your list?")) {
-            a.removeBooking(currentUser);
-            mangfile.saveToFile(mangfile.FileType.APPOINTMENT, appointmentsList);
-            refreshMyBooked();
-            msg("Appointment removed from your list.");
-        }
-        return;
-    }
-}
-
-// ================================================================
-    //  USER PANEL — ADD APPOINTMENT DIALOG
     // ================================================================
-    private void showUserAddAppointmentDialog() {
-        if (currentUser == null) return;
-        loadData();
-
-        ArrayList<property> myProps = new ArrayList<>();
-        for (property p : propertiesList)
-            if (p.getOwner() != null && p.getOwner().getId().equals(currentUser.getId()))
-                myProps.add(p);
-
-        if (myProps.isEmpty()) {
-            msg("You don't own any properties. Add a property first!"); return;
-        }
-
-        JDialog dlg = new JDialog(this, "Add Appointment on My Property", true);
-        dlg.setSize(480, 400);
-        dlg.setLocationRelativeTo(this);
-        dlg.setLayout(new BorderLayout());
+    //  DIALOGS — ADMIN
+    // ================================================================
+    private void showAddUserDialog() {
+        JDialog dlg = new JDialog(this, "Add New User", true);
+        dlg.setSize(400, 240); dlg.setLocationRelativeTo(this); dlg.setLayout(new BorderLayout());
 
         JPanel form = new JPanel(new GridBagLayout());
         form.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
         GridBagConstraints g = new GridBagConstraints();
-        g.fill = GridBagConstraints.HORIZONTAL;
-        g.insets = new Insets(6, 6, 6, 6);
+        g.fill = GridBagConstraints.HORIZONTAL; g.insets = new Insets(6, 6, 6, 6);
+
+        JTextField     tfName  = new JTextField(18);
+        JTextField     tfEmail = new JTextField(18);
+        JPasswordField tfPass  = new JPasswordField(18);
+
+        g.gridx = 0; g.gridy = 0; form.add(new JLabel("Name:"),     g); g.gridx = 1; form.add(tfName,  g);
+        g.gridx = 0; g.gridy = 1; form.add(new JLabel("Email:"),    g); g.gridx = 1; form.add(tfEmail, g);
+        g.gridx = 0; g.gridy = 2; form.add(new JLabel("Password:"), g); g.gridx = 1; form.add(tfPass,  g);
+
+        JPanel btns = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
+        JButton save = new JButton("Save"); JButton cancel = new JButton("Cancel");
+        style(save, PRIMARY); style(cancel, GRAY_BTN);
+
+        save.addActionListener(e -> {
+            // Delegate validation + persistence to service
+            String error = service.addUser(
+                tfName.getText().trim(),
+                tfEmail.getText().trim(),
+                new String(tfPass.getPassword()));
+            if (error != null) { msg(error); return; }
+            msg("User added successfully!");
+            refreshDashboard();
+            dlg.dispose();
+        });
+        cancel.addActionListener(e -> dlg.dispose());
+        btns.add(save); btns.add(cancel);
+        dlg.add(form, BorderLayout.CENTER); dlg.add(btns, BorderLayout.SOUTH);
+        dlg.setVisible(true);
+    }
+
+    private void showAddPropertyDialog() {
+        service.loadAll();
+        if (service.getAllUsers().isEmpty()) { msg("You need at least one user first."); return; }
+
+        JDialog dlg = new JDialog(this, "Add Property", true);
+        dlg.setSize(400, 370); dlg.setLocationRelativeTo(this); dlg.setLayout(new BorderLayout());
+
+        JPanel form = new JPanel(new GridBagLayout());
+        form.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+        GridBagConstraints g = new GridBagConstraints();
+        g.fill = GridBagConstraints.HORIZONTAL; g.insets = new Insets(6, 6, 6, 6);
+
+        JTextField tfName  = new JTextField(18);
+        JTextField tfAddr  = new JTextField(18);
+        JTextField tfPrice = new JTextField(18);
+        JTextField tfCap   = new JTextField(18);
+
+        String[]    labels = {"Name:", "Address:", "Price:", "Capacity:"};
+        JTextField[] fields = {tfName, tfAddr, tfPrice, tfCap};
+        for (int i = 0; i < fields.length; i++) {
+            g.gridx = 0; g.gridy = i; form.add(new JLabel(labels[i]), g);
+            g.gridx = 1;              form.add(fields[i], g);
+        }
+
+        String[] ownerNames = service.getAllUsers().stream().map(user::getName).toArray(String[]::new);
+        JComboBox<String> ownerCombo = new JComboBox<>(ownerNames);
+        g.gridx = 0; g.gridy = fields.length; form.add(new JLabel("Owner:"), g);
+        g.gridx = 1;                           form.add(ownerCombo, g);
+
+        JPanel btns = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
+        JButton save = new JButton("Save"); JButton cancel = new JButton("Cancel");
+        style(save, PRIMARY); style(cancel, GRAY_BTN);
+
+        save.addActionListener(e -> {
+            try {
+                double price = Double.parseDouble(tfPrice.getText().trim());
+                int    cap   = Integer.parseInt(tfCap.getText().trim());
+                user   owner = service.getAllUsers().get(ownerCombo.getSelectedIndex());
+                String error = service.addProperty(
+                    tfName.getText().trim(), tfAddr.getText().trim(), price, cap, owner);
+                if (error != null) { msg(error); return; }
+                refreshProperties();
+                msg("Property added!"); dlg.dispose();
+            } catch (NumberFormatException ex) {
+                msg("Price must be a number and Capacity must be a whole number.");
+            }
+        });
+        cancel.addActionListener(e -> dlg.dispose());
+        btns.add(save); btns.add(cancel);
+        dlg.add(form, BorderLayout.CENTER); dlg.add(btns, BorderLayout.SOUTH);
+        dlg.setVisible(true);
+    }
+
+    private void showEditPropertyDialog() {
+        int row = propertiesTable.getSelectedRow();
+        if (row < 0) { msg("Please select a property first."); return; }
+        String id = (String) propertiesModel.getValueAt(row, 0);
+        property prop = service.findProperty(id);
+        if (prop == null) { msg("Property not found!"); return; }
+
+        JDialog dlg = new JDialog(this, "Edit Property", true);
+        dlg.setSize(400, 370); dlg.setLocationRelativeTo(this); dlg.setLayout(new BorderLayout());
+
+        JPanel form = new JPanel(new GridBagLayout());
+        form.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+        GridBagConstraints g = new GridBagConstraints();
+        g.fill = GridBagConstraints.HORIZONTAL; g.insets = new Insets(6, 6, 6, 6);
+
+        JTextField tfName  = new JTextField(prop.getName(), 18);
+        JTextField tfAddr  = new JTextField(prop.getAddress(), 18);
+        JTextField tfPrice = new JTextField(String.valueOf(prop.getPrice()), 18);
+        JTextField tfCap   = new JTextField(String.valueOf(prop.getMaxViewingCapacity()), 18);
+
+        String[]    labels = {"Name:", "Address:", "Price:", "Capacity:"};
+        JTextField[] fields = {tfName, tfAddr, tfPrice, tfCap};
+        for (int i = 0; i < fields.length; i++) {
+            g.gridx = 0; g.gridy = i; form.add(new JLabel(labels[i]), g);
+            g.gridx = 1;              form.add(fields[i], g);
+        }
+
+        String[] ownerNames = service.getAllUsers().stream().map(user::getName).toArray(String[]::new);
+        JComboBox<String> ownerCombo = new JComboBox<>(ownerNames);
+        if (prop.getOwner() != null) {
+            ArrayList<user> users = service.getAllUsers();
+            for (int i = 0; i < users.size(); i++)
+                if (users.get(i).getId().equals(prop.getOwner().getId())) { ownerCombo.setSelectedIndex(i); break; }
+        }
+        g.gridx = 0; g.gridy = 4; form.add(new JLabel("Owner:"), g);
+        g.gridx = 1;              form.add(ownerCombo, g);
+
+        JPanel btns = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
+        JButton save = new JButton("Save"); JButton cancel = new JButton("Cancel");
+        style(save, PRIMARY); style(cancel, GRAY_BTN);
+
+        save.addActionListener(e -> {
+            try {
+                double price = Double.parseDouble(tfPrice.getText().trim());
+                int    cap   = Integer.parseInt(tfCap.getText().trim());
+                user   owner = service.getAllUsers().get(ownerCombo.getSelectedIndex());
+                String error = service.editProperty(id, tfName.getText().trim(),
+                    tfAddr.getText().trim(), price, cap, owner);
+                if (error != null) { msg(error); return; }
+                refreshProperties(); msg("Property updated successfully!"); dlg.dispose();
+            } catch (NumberFormatException ex) {
+                msg("Price must be a number and Capacity must be a whole number.");
+            }
+        });
+        cancel.addActionListener(e -> dlg.dispose());
+        btns.add(save); btns.add(cancel);
+        dlg.add(form, BorderLayout.CENTER); dlg.add(btns, BorderLayout.SOUTH);
+        dlg.setVisible(true);
+    }
+
+    private void showAddAppointmentDialog() {
+        service.loadAll();
+        if (service.getAllProperties().isEmpty()) { msg("You need at least one property first."); return; }
+
+        JDialog dlg = new JDialog(this, "Add New Appointment", true);
+        dlg.setSize(480, 420); dlg.setLocationRelativeTo(this); dlg.setLayout(new BorderLayout());
+
+        JPanel form = new JPanel(new GridBagLayout());
+        form.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+        GridBagConstraints g = new GridBagConstraints();
+        g.fill = GridBagConstraints.HORIZONTAL; g.insets = new Insets(6, 6, 6, 6);
+
+        ArrayList<property> props = service.getAllProperties();
+        String[] propNames = props.stream().map(property::getName).toArray(String[]::new);
+        user[] owners = props.stream().map(property::getOwner).toArray(user[]::new);
+
+        JComboBox<String> propCombo = new JComboBox<>(propNames);
+        JLabel ownerLabel = new JLabel(owners.length > 0 && owners[0] != null ? owners[0].getName() : "N/A");
+        propCombo.addActionListener(ev -> {
+            int idx = propCombo.getSelectedIndex();
+            ownerLabel.setText(owners[idx] != null ? owners[idx].getName() : "N/A");
+        });
+
+        String[] typeNames = java.util.Arrays.stream(appointment.AppointmentType.values())
+            .map(appointment.AppointmentType::getDisplayName).toArray(String[]::new);
+        JComboBox<String> typeCombo = new JComboBox<>(typeNames);
+        JLabel rulesLabel = new JLabel(appointment.AppointmentType.values()[0].getRulesSummary());
+        rulesLabel.setForeground(Color.RED);
+        typeCombo.addActionListener(ev -> rulesLabel.setText(
+            appointment.AppointmentType.values()[typeCombo.getSelectedIndex()].getRulesSummary()));
+
+        JTextField tfDate    = new JTextField(20);
+        JTextField tfTime    = new JTextField(20);
+        JTextField tfEndTime = new JTextField(20);
+        tfDate.setToolTipText("Format: yyyy-MM-dd");
+        tfTime.setToolTipText("Format: HH:mm");
+        tfEndTime.setToolTipText("Duration in minutes");
+
+        g.gridx = 0; g.gridy = 0; form.add(new JLabel("Property:"),          g); g.gridx = 1; form.add(propCombo,  g);
+        g.gridx = 0; g.gridy = 1; form.add(new JLabel("Owner:"),             g); g.gridx = 1; form.add(ownerLabel, g);
+        g.gridx = 0; g.gridy = 2; form.add(new JLabel("Type:"),              g); g.gridx = 1; form.add(typeCombo,  g);
+        g.gridx = 0; g.gridy = 3; g.gridwidth = 2;                              form.add(rulesLabel, g); g.gridwidth = 1;
+        g.gridx = 0; g.gridy = 4; form.add(new JLabel("Date (yyyy-MM-dd):"), g); g.gridx = 1; form.add(tfDate,     g);
+        g.gridx = 0; g.gridy = 5; form.add(new JLabel("Time (HH:mm):"),      g); g.gridx = 1; form.add(tfTime,     g);
+        g.gridx = 0; g.gridy = 6; form.add(new JLabel("Duration (mm):"),     g); g.gridx = 1; form.add(tfEndTime,  g);
+
+        JPanel btns = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
+        JButton save = new JButton("Save"); JButton cancel = new JButton("Cancel");
+        style(save, PRIMARY); style(cancel, GRAY_BTN);
+
+        save.addActionListener(e -> {
+            appointment.AppointmentType selType = appointment.AppointmentType.values()[typeCombo.getSelectedIndex()];
+            int endMin;
+            try { endMin = Integer.parseInt(tfEndTime.getText().trim()); }
+            catch (NumberFormatException ex) { msg("Duration must be a number."); return; }
+            try {
+                time t = parseTime(tfDate.getText().trim(), tfTime.getText().trim(), endMin, "yyyy-MM-dd");
+                if (t == null) return;
+                property selProp = props.get(propCombo.getSelectedIndex());
+                String error = service.addAppointment(selProp, selType, t, endMin);
+                if (error != null) { msg(error); return; }
+                refreshDashboard(); msg("Appointment added successfully!"); dlg.dispose();
+            } catch (Exception ex) { msg("Invalid format. Use yyyy-MM-dd and HH:mm"); }
+        });
+        cancel.addActionListener(e -> dlg.dispose());
+        btns.add(save); btns.add(cancel);
+        dlg.add(form, BorderLayout.CENTER); dlg.add(btns, BorderLayout.SOUTH);
+        dlg.setVisible(true);
+    }
+
+    private void showEditAppointmentDialog() {
+        int row = appointmentsTable.getSelectedRow();
+        if (row < 0) { msg("Please select an appointment first."); return; }
+        String id = (String) appointmentsModel.getValueAt(row, 0);
+        appointment appt = service.findAppointment(id);
+        if (appt == null) { msg("Appointment not found!"); return; }
+
+        JDialog dlg = new JDialog(this, "Edit Appointment", true);
+        dlg.setSize(480, 380); dlg.setLocationRelativeTo(this); dlg.setLayout(new BorderLayout());
+
+        JPanel form = new JPanel(new GridBagLayout());
+        form.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+        GridBagConstraints g = new GridBagConstraints();
+        g.fill = GridBagConstraints.HORIZONTAL; g.insets = new Insets(6, 6, 6, 6);
+
+        time curTime = appt.getAppointmentTime();
+        JTextField tfDate    = new JTextField(curTime.getdatetime().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd")), 20);
+        JTextField tfTime    = new JTextField(curTime.getdatetime().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")), 20);
+        JTextField tfEndTime = new JTextField("30", 20);
+        tfDate.setToolTipText("Format: yyyy-MM-dd");
+        tfTime.setToolTipText("Format: HH:mm");
+        tfEndTime.setToolTipText("Duration in minutes");
+
+        String[] typeNames = java.util.Arrays.stream(appointment.AppointmentType.values())
+            .map(appointment.AppointmentType::getDisplayName).toArray(String[]::new);
+        JComboBox<String> typeCombo = new JComboBox<>(typeNames);
+        typeCombo.setSelectedItem(appt.getType().getDisplayName());
+
+        JLabel rulesLabel = new JLabel(appt.getType().getRulesSummary());
+        rulesLabel.setForeground(Color.RED);
+        typeCombo.addActionListener(ev -> rulesLabel.setText(
+            appointment.AppointmentType.values()[typeCombo.getSelectedIndex()].getRulesSummary()));
+
+        String[] statusNames = {"AVAILABLE", "CONFIRMED", "CANCELLED", "COMPLETED"};
+        JComboBox<String> statusCombo = new JComboBox<>(statusNames);
+        statusCombo.setSelectedItem(appt.getStatus().toString());
+
+        g.gridx = 0; g.gridy = 0; form.add(new JLabel("Type:"),              g); g.gridx = 1; form.add(typeCombo,   g);
+        g.gridx = 0; g.gridy = 1; g.gridwidth = 2;                               form.add(rulesLabel, g); g.gridwidth = 1;
+        g.gridx = 0; g.gridy = 2; form.add(new JLabel("Date (yyyy-MM-dd):"), g); g.gridx = 1; form.add(tfDate,      g);
+        g.gridx = 0; g.gridy = 3; form.add(new JLabel("Time (HH:mm):"),      g); g.gridx = 1; form.add(tfTime,      g);
+        g.gridx = 0; g.gridy = 4; form.add(new JLabel("Duration (mm):"),     g); g.gridx = 1; form.add(tfEndTime,   g);
+        g.gridx = 0; g.gridy = 5; form.add(new JLabel("Status:"),            g); g.gridx = 1; form.add(statusCombo, g);
+
+        JPanel btns = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
+        JButton save = new JButton("Save"); JButton cancel = new JButton("Cancel");
+        style(save, PRIMARY); style(cancel, GRAY_BTN);
+
+        save.addActionListener(e -> {
+            appointment.AppointmentType selType   = appointment.AppointmentType.values()[typeCombo.getSelectedIndex()];
+            appointment.AppointmentStatus selStatus = appointment.AppointmentStatus.valueOf((String) statusCombo.getSelectedItem());
+            int endMin;
+            try { endMin = Integer.parseInt(tfEndTime.getText().trim()); }
+            catch (NumberFormatException ex) { msg("Duration must be a number."); return; }
+            try {
+                time t = parseTime(tfDate.getText().trim(), tfTime.getText().trim(), endMin, "yyyy-MM-dd");
+                if (t == null) return;
+                String error = service.adminEditAppointment(id, selType, t, selStatus);
+                if (error != null) { msg(error); return; }
+                refreshAppointments(); msg("Appointment updated successfully!"); dlg.dispose();
+            } catch (Exception ex) { msg("Invalid format. Use yyyy-MM-dd and HH:mm"); }
+        });
+        cancel.addActionListener(e -> dlg.dispose());
+        btns.add(save); btns.add(cancel);
+        dlg.add(form, BorderLayout.CENTER); dlg.add(btns, BorderLayout.SOUTH);
+        dlg.setVisible(true);
+    }
+
+    // ================================================================
+    //  DIALOGS — USER
+    // ================================================================
+    private void showUserAddPropertyDialog() {
+        if (currentUser == null) return;
+
+        JDialog dlg = new JDialog(this, "Add My Property", true);
+        dlg.setSize(400, 320); dlg.setLocationRelativeTo(this); dlg.setLayout(new BorderLayout());
+
+        JPanel form = new JPanel(new GridBagLayout());
+        form.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+        GridBagConstraints g = new GridBagConstraints();
+        g.fill = GridBagConstraints.HORIZONTAL; g.insets = new Insets(6, 6, 6, 6);
+
+        JTextField tfName  = new JTextField(18);
+        JTextField tfAddr  = new JTextField(18);
+        JTextField tfPrice = new JTextField(18);
+        JTextField tfCap   = new JTextField(18);
+
+        String[] labels = {"Name:", "Address:", "Price:", "Capacity:"};
+        JTextField[] fields = {tfName, tfAddr, tfPrice, tfCap};
+        for (int i = 0; i < fields.length; i++) {
+            g.gridx = 0; g.gridy = i; form.add(new JLabel(labels[i]), g);
+            g.gridx = 1;              form.add(fields[i], g);
+        }
+
+        JPanel btns = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
+        JButton save = new JButton("Save"); JButton cancel = new JButton("Cancel");
+        style(save, PRIMARY); style(cancel, GRAY_BTN);
+
+        save.addActionListener(e -> {
+            try {
+                double price = Double.parseDouble(tfPrice.getText().trim());
+                int    cap   = Integer.parseInt(tfCap.getText().trim());
+                String error = service.addProperty(
+                    tfName.getText().trim(), tfAddr.getText().trim(), price, cap, currentUser);
+                if (error != null) { msg(error); return; }
+                msg("Property added successfully!"); refreshMyProps(); dlg.dispose();
+            } catch (NumberFormatException ex) {
+                msg("Price must be a number and Capacity must be a whole number.");
+            }
+        });
+        cancel.addActionListener(e -> dlg.dispose());
+        btns.add(save); btns.add(cancel);
+        dlg.add(form, BorderLayout.CENTER); dlg.add(btns, BorderLayout.SOUTH);
+        dlg.setVisible(true);
+    }
+
+    private void showUserEditPropertyDialog() {
+        if (currentUser == null) return;
+        int row = myPropsTable.getSelectedRow();
+        if (row < 0) { msg("Please select a property first."); return; }
+        String id = (String) myPropsModel.getValueAt(row, 0);
+        property prop = service.getPropertiesByOwner(currentUser).stream()
+            .filter(p -> p.getPropertyId().equals(id)).findFirst().orElse(null);
+        if (prop == null) { msg("Property not found or not yours!"); return; }
+
+        JDialog dlg = new JDialog(this, "Edit My Property", true);
+        dlg.setSize(400, 300); dlg.setLocationRelativeTo(this); dlg.setLayout(new BorderLayout());
+
+        JPanel form = new JPanel(new GridBagLayout());
+        form.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+        GridBagConstraints g = new GridBagConstraints();
+        g.fill = GridBagConstraints.HORIZONTAL; g.insets = new Insets(6, 6, 6, 6);
+
+        JTextField tfName  = new JTextField(prop.getName(), 18);
+        JTextField tfAddr  = new JTextField(prop.getAddress(), 18);
+        JTextField tfPrice = new JTextField(String.valueOf(prop.getPrice()), 18);
+        JTextField tfCap   = new JTextField(String.valueOf(prop.getMaxViewingCapacity()), 18);
+
+        String[] labels = {"Name:", "Address:", "Price:", "Capacity:"};
+        JTextField[] fields = {tfName, tfAddr, tfPrice, tfCap};
+        for (int i = 0; i < fields.length; i++) {
+            g.gridx = 0; g.gridy = i; form.add(new JLabel(labels[i]), g);
+            g.gridx = 1;              form.add(fields[i], g);
+        }
+
+        JPanel btns = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
+        JButton save = new JButton("Save"); JButton cancel = new JButton("Cancel");
+        style(save, PRIMARY); style(cancel, GRAY_BTN);
+
+        save.addActionListener(e -> {
+            try {
+                double price = Double.parseDouble(tfPrice.getText().trim());
+                int    cap   = Integer.parseInt(tfCap.getText().trim());
+               
+                String error = service.editProperty(id, tfName.getText().trim(),
+                    tfAddr.getText().trim(), price, cap, currentUser);
+                if (error != null) { msg(error); return; }
+                refreshMyProps(); msg("Property updated successfully!"); dlg.dispose();
+            } catch (NumberFormatException ex) {
+                msg("Price must be a number and Capacity must be a whole number.");
+            }
+        });
+        cancel.addActionListener(e -> dlg.dispose());
+        btns.add(save); btns.add(cancel);
+        dlg.add(form, BorderLayout.CENTER); dlg.add(btns, BorderLayout.SOUTH);
+        dlg.setVisible(true);
+    }
+
+    private void showUserAddAppointmentDialog() {
+        if (currentUser == null) return;
+        service.loadAll();
+
+        List<property> myProps = service.getPropertiesByOwner(currentUser);
+        if (myProps.isEmpty()) { msg("You don't own any properties. Add a property first!"); return; }
+
+        JDialog dlg = new JDialog(this, "Add Appointment on My Property", true);
+        dlg.setSize(480, 400); dlg.setLocationRelativeTo(this); dlg.setLayout(new BorderLayout());
+
+        JPanel form = new JPanel(new GridBagLayout());
+        form.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+        GridBagConstraints g = new GridBagConstraints();
+        g.fill = GridBagConstraints.HORIZONTAL; g.insets = new Insets(6, 6, 6, 6);
 
         String[] propNames = myProps.stream().map(property::getName).toArray(String[]::new);
         JComboBox<String> propCombo = new JComboBox<>(propNames);
@@ -1915,19 +1427,17 @@ private void deleteMybooked() {
         String[] typeNames = java.util.Arrays.stream(appointment.AppointmentType.values())
             .map(appointment.AppointmentType::getDisplayName).toArray(String[]::new);
         JComboBox<String> typeCombo = new JComboBox<>(typeNames);
-        JLabel rulesLabel = new JLabel(appointment.AppointmentType.values()[0].getRulesSummary() );
+        JLabel rulesLabel = new JLabel(appointment.AppointmentType.values()[0].getRulesSummary());
         rulesLabel.setForeground(Color.RED);
-        typeCombo.addActionListener(ev -> {
-            appointment.AppointmentType sel = appointment.AppointmentType.values()[typeCombo.getSelectedIndex()];
-            rulesLabel.setText(sel.getRulesSummary() );
-        });
+        typeCombo.addActionListener(ev -> rulesLabel.setText(
+            appointment.AppointmentType.values()[typeCombo.getSelectedIndex()].getRulesSummary()));
 
         JTextField tfDate    = new JTextField(18);
         JTextField tfTime    = new JTextField(18);
         JTextField tfEndTime = new JTextField(18);
         tfDate.setToolTipText("Format: yyyy-MM-dd");
         tfTime.setToolTipText("Format: HH:mm");
-        tfEndTime.setToolTipText("Duration in minutes (limit depends on type)");
+        tfEndTime.setToolTipText("Duration in minutes");
 
         g.gridx = 0; g.gridy = 0; form.add(new JLabel("Property:"),          g); g.gridx = 1; form.add(propCombo,  g);
         g.gridx = 0; g.gridy = 1; form.add(new JLabel("Type:"),              g); g.gridx = 1; form.add(typeCombo,  g);
@@ -1941,111 +1451,178 @@ private void deleteMybooked() {
         style(save, PRIMARY); style(cancel, GRAY_BTN);
 
         save.addActionListener(e -> {
-            String dateStr = tfDate.getText().trim();
-            String timeStr = tfTime.getText().trim();
-            String endStr  = tfEndTime.getText().trim();
-            if (dateStr.isEmpty() || timeStr.isEmpty() || endStr.isEmpty()) {
-                msg("Please fill all fields!"); return;
-            }
             appointment.AppointmentType selType = appointment.AppointmentType.values()[typeCombo.getSelectedIndex()];
             int endMin;
-            try { endMin = Integer.parseInt(endStr); } catch (NumberFormatException ex) { msg("Duration must be a number."); return; }
-            if (endMin < 1 || endMin > selType.getMaxDurationMinutes()) {
-                msg("Duration for " + selType.getDisplayName() + " must be between 1 and " + selType.getMaxDurationMinutes() + " minutes."); return;
-            }
+            try { endMin = Integer.parseInt(tfEndTime.getText().trim()); }
+            catch (NumberFormatException ex) { msg("Duration must be a number."); return; }
             try {
+                time t = parseTime(tfDate.getText().trim(), tfTime.getText().trim(), endMin, "yyyy-MM-dd");
+                if (t == null) return;
                 property selProp = myProps.get(propCombo.getSelectedIndex());
-                String appId = "APT" + String.format("%03d", appointmentsList.size() + 1);
-                String[] dp = dateStr.split("-"); String[] tp = timeStr.split(":");
-                time t = new time();
-                t.setdate(Integer.parseInt(tp[0]), Integer.parseInt(tp[1]),
-                          Integer.parseInt(dp[2]), Integer.parseInt(dp[1]), Integer.parseInt(dp[0]));
-                t.setenddate(endMin);
-                String timeError = appointment.validateAppointmentTime(t.getdatetime(), selType);
-                if (timeError != null) { msg(timeError); return; }
-                appointment newApp = new appointment(appId, selProp, t, selType);
-                newApp.setStatus(appointment.AppointmentStatus.AVAILABLE);
-                appointmentsList.add(newApp);
-                mangfile.saveToFile(mangfile.FileType.APPOINTMENT, appointmentsList);
+                String error = service.addAppointment(selProp, selType, t, endMin);
+                if (error != null) { msg(error); return; }
                 msg("Appointment added and is now available for booking!");
-                refreshMyAppts();
-                refreshAvailableAppts();
-                dlg.dispose();
-            } catch (Exception ex) {
-                msg("Invalid format. Use yyyy-MM-dd and HH:mm");
-            }
+                refreshMyAppts(); refreshAvailableAppts(); dlg.dispose();
+            } catch (Exception ex) { msg("Invalid format. Use yyyy-MM-dd and HH:mm"); }
         });
         cancel.addActionListener(e -> dlg.dispose());
         btns.add(save); btns.add(cancel);
-        dlg.add(form, BorderLayout.CENTER);
-        dlg.add(btns, BorderLayout.SOUTH);
+        dlg.add(form, BorderLayout.CENTER); dlg.add(btns, BorderLayout.SOUTH);
         dlg.setVisible(true);
     }
 
-    // ================================================================
-    //  USER PANEL — ADD PROPERTY DIALOG
-    // ================================================================
-    private void showUserAddPropertyDialog() {
+    private void showUserEditAppointmentDialog() {
         if (currentUser == null) return;
+        int row = myApptTable.getSelectedRow();
+        if (row < 0) { msg("Please select an appointment first."); return; }
+        String id = (String) myApptModel.getValueAt(row, 0);
+        appointment appt = service.findAppointment(id);
+        if (appt == null) { msg("Appointment not found!"); return; }
+        if (appt.getStatus() == appointment.AppointmentStatus.CANCELLED
+                || appt.getStatus() == appointment.AppointmentStatus.COMPLETED) {
+            msg("Cannot edit a cancelled or completed appointment."); return;
+        }
 
-        JDialog dlg = new JDialog(this, "Add My Property", true);
-        dlg.setSize(400, 320);
-        dlg.setLocationRelativeTo(this);
-        dlg.setLayout(new BorderLayout());
+        JDialog dlg = new JDialog(this, "Edit My Appointment", true);
+        dlg.setSize(480, 360); dlg.setLocationRelativeTo(this); dlg.setLayout(new BorderLayout());
 
         JPanel form = new JPanel(new GridBagLayout());
         form.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
         GridBagConstraints g = new GridBagConstraints();
-        g.fill = GridBagConstraints.HORIZONTAL;
-        g.insets = new Insets(6, 6, 6, 6);
+        g.fill = GridBagConstraints.HORIZONTAL; g.insets = new Insets(6, 6, 6, 6);
 
-        JTextField tfName  = new JTextField(18);
-        JTextField tfAddr  = new JTextField(18);
-        JTextField tfPrice = new JTextField(18);
-        JTextField tfCap   = new JTextField(18);
+        time curTime = appt.getAppointmentTime();
+        JTextField tfDate    = new JTextField(curTime.getdatetime().format(java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy")), 20);
+        JTextField tfTime    = new JTextField(curTime.getdatetime().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")), 20);
+        JTextField tfEndTime = new JTextField("30", 20);
+        tfDate.setToolTipText("Format: dd-MM-yyyy");
+        tfTime.setToolTipText("Format: HH:mm");
 
-        String[] labels = {"Name:", "Address:","Price:", "Capacity:"};
-        JTextField[] fields = {tfName, tfAddr,tfPrice, tfCap};
-        for (int i = 0; i < fields.length; i++) {
-            g.gridx = 0; g.gridy = i; form.add(new JLabel(labels[i]), g);
-            g.gridx = 1;              form.add(fields[i], g);
-        }
+        String[] typeNames = java.util.Arrays.stream(appointment.AppointmentType.values())
+            .map(appointment.AppointmentType::getDisplayName).toArray(String[]::new);
+        JComboBox<String> typeCombo = new JComboBox<>(typeNames);
+        typeCombo.setSelectedItem(appt.getType().getDisplayName());
+
+        JLabel rulesLabel = new JLabel(appt.getType().getRulesSummary());
+        rulesLabel.setForeground(Color.RED);
+        typeCombo.addActionListener(ev -> rulesLabel.setText(
+            appointment.AppointmentType.values()[typeCombo.getSelectedIndex()].getRulesSummary()));
+
+        g.gridx = 0; g.gridy = 0; form.add(new JLabel("Type:"),              g); g.gridx = 1; form.add(typeCombo, g);
+        g.gridx = 0; g.gridy = 1; g.gridwidth = 3;                               form.add(rulesLabel, g); g.gridwidth = 1;
+        g.gridx = 0; g.gridy = 2; form.add(new JLabel("Date (dd-MM-yyyy):"), g); g.gridx = 1; form.add(tfDate,    g);
+        g.gridx = 0; g.gridy = 3; form.add(new JLabel("Time (HH:mm):"),      g); g.gridx = 1; form.add(tfTime,    g);
+        g.gridx = 0; g.gridy = 4; form.add(new JLabel("Duration (mm):"),     g); g.gridx = 1; form.add(tfEndTime, g);
 
         JPanel btns = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
         JButton save = new JButton("Save"); JButton cancel = new JButton("Cancel");
         style(save, PRIMARY); style(cancel, GRAY_BTN);
 
         save.addActionListener(e -> {
-            if (tfName.getText().trim().isEmpty() || tfAddr.getText().trim().isEmpty()) {
-                msg("Name and Address are required!"); return;
-            }
+            appointment.AppointmentType selType = appointment.AppointmentType.values()[typeCombo.getSelectedIndex()];
+            int endMin;
+            try { endMin = Integer.parseInt(tfEndTime.getText().trim()); }
+            catch (NumberFormatException ex) { msg("Duration must be a number."); return; }
             try {
-                double price = Double.parseDouble(tfPrice.getText().trim());
-                int    cap   = Integer.parseInt(tfCap.getText().trim());
-                String newId = "P" + String.format("%03d", propertiesList.size() + 1);
-                propertiesList.add(new property(newId,
-                    tfName.getText().trim(), tfAddr.getText().trim(), price, cap, currentUser));
-                mangfile.saveToFile(mangfile.FileType.PROPERTY, propertiesList);
-                msg("Property added successfully!");
-                refreshMyProps();
-                dlg.dispose();
-            } catch (NumberFormatException ex) {
-                msg("Price must be a number and Capacity must be a whole number.");
-            }
+                time t = parseTime(tfDate.getText().trim(), tfTime.getText().trim(), endMin, "dd-MM-yyyy");
+                if (t == null) return;
+                String error = service.ownerEditAppointment(id, currentUser, selType, t);
+                if (error != null) { msg(error); return; }
+                refreshMyAppts(); refreshAvailableAppts(); msg("Appointment updated successfully!"); dlg.dispose();
+            } catch (Exception ex) { msg("Invalid format. Use dd-MM-yyyy and HH:mm"); }
         });
         cancel.addActionListener(e -> dlg.dispose());
         btns.add(save); btns.add(cancel);
-        dlg.add(form, BorderLayout.CENTER);
-        dlg.add(btns, BorderLayout.SOUTH);
+        dlg.add(form, BorderLayout.CENTER); dlg.add(btns, BorderLayout.SOUTH);
         dlg.setVisible(true);
+    }
+
+    // ================================================================
+    //  SHARED HELPER — parse date/time strings into a time object
+    // ================================================================
+
+    private time parseTime(String dateStr, String timeStr, int durationMin, String dateFormat) {
+        if (dateStr.isEmpty() || timeStr.isEmpty()) { msg("Please fill all fields!"); return null; }
+        try {
+            String[] dp = dateStr.split("-");
+            String[] tp = timeStr.split(":");
+            int hour   = Integer.parseInt(tp[0]);
+            int minute = Integer.parseInt(tp[1]);
+            int day, month, year;
+            if ("yyyy-MM-dd".equals(dateFormat)) {
+                year  = Integer.parseInt(dp[0]);
+                month = Integer.parseInt(dp[1]);
+                day   = Integer.parseInt(dp[2]);
+            } else {
+                day   = Integer.parseInt(dp[0]);
+                month = Integer.parseInt(dp[1]);
+                year  = Integer.parseInt(dp[2]);
+            }
+            time t = new time();
+            t.setdate(hour, minute, day, month, year);
+            t.setenddate(durationMin);
+            return t;
+        } catch (Exception ex) {
+            msg("Invalid format. Use " + dateFormat + " and HH:mm");
+            return null;
+        }
+    }
+
+    // ================================================================
+    //  BACKGROUND TASKS
+    // ================================================================
+    private void startStatusChecker() {
+        Thread checker = new Thread(() -> {
+            while (currentUser != null) {
+                try { Thread.sleep(60_000); } catch (InterruptedException ex) { break; }
+                SwingUtilities.invokeLater(() -> {
+                    if (currentUser == null) return;
+                    service.loadAll();
+                    service.checkAndUpdateAppointmentStatuses();
+                    if (availableApptModel != null) refreshAvailableAppts();
+                    if (myApptModel       != null) refreshMyAppts();
+                    if (myBookedModel     != null) refreshMyBooked();
+                });
+            }
+        });
+        checker.setDaemon(true);
+        checker.start();
+    }
+
+    private final HashSet<String> notifiedAppointments = new HashSet<>();
+
+    private void startReminderChecker() {
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+        scheduler.scheduleAtFixedRate(() -> {
+            LocalDateTime now = LocalDateTime.now();
+            for (appointment appt : service.getAllAppointments()) {
+                if (appt.getStatus() == appointment.AppointmentStatus.CANCELLED ||
+                        appt.getStatus() == appointment.AppointmentStatus.COMPLETED) continue;
+                LocalDateTime apptTime = appt.getAppointmentTime().getdatetime();
+                long minutes = Duration.between(now, apptTime).toMinutes();
+                if (minutes >= 0 && minutes <= 5) {
+                    for (user u : appt.getBookedBy()) {
+                        String key = appt.getAppointmentId() + "-" + u.getEmail();
+                        if (notifiedAppointments.contains(key)) continue;
+                        notifiedAppointments.add(key);
+                        SwingUtilities.invokeLater(() -> {
+                            Toolkit.getDefaultToolkit().beep();
+                            JOptionPane.showMessageDialog(null,
+                                "Reminder!\nYour appointment for: " + appt.getProperty().getName()
+                                    + "\nStarts in less than 5 minutes: " + appt.getAppointmentTime()
+                                    + "\nFor user: " + u.getEmail(),
+                                "Appointment Reminder", JOptionPane.INFORMATION_MESSAGE);
+                        });
+                    }
+                }
+            }
+        }, 0, 30, TimeUnit.SECONDS);
     }
 
     // ================================================================
     //  UTILITY
     // ================================================================
-    private void msg(String text) {
-        JOptionPane.showMessageDialog(this, text);
-    }
+    private void msg(String text) { JOptionPane.showMessageDialog(this, text); }
 
     private boolean confirm(String text) {
         return JOptionPane.showConfirmDialog(this, text, "Confirm",
@@ -2060,33 +1637,26 @@ private void deleteMybooked() {
         switch (e.getActionCommand()) {
 
             case "LOGIN":
-                loadData();
+                service.loadAll();
                 String email = emailField.getText().trim();
                 String pass  = new String(passField.getPassword());
                 if (email.isEmpty() || pass.isEmpty()) { msg("Fill all fields."); break; }
 
                 if (email.equals("admin") && pass.equals("1234")) {
                     cardLayout.show(mainPanel, "admin");
-                    emailField.setText("");
-                    passField.setText("");         
-                    break;
+                    emailField.setText(""); passField.setText(""); break;
                 }
-                boolean found = false;
-                for (user u : customList)
-                    if ((u.getName().equalsIgnoreCase(email) || u.getEmail().equalsIgnoreCase(email)) && u.getPassword().equals(pass)) {
-                        currentUser = u;
-                        welcomeLabel.setText("Welcome, " + u.getName() + "!");
-                        emailField.setText("");
-                        passField.setText("");
-                        refreshAvailableAppts();
-                        refreshMyAppts();
-                        refreshMyBooked();
-                        refreshMyProps();
-                        startStatusChecker();
-                        cardLayout.show(mainPanel, "user");
-                        found = true; break;
-                    }
-                if (!found) msg("Invalid credentials!");
+                user found = service.login(email, pass);
+                if (found != null) {
+                    currentUser = found;
+                    welcomeLabel.setText("Welcome, " + found.getName() + "!");
+                    emailField.setText(""); passField.setText("");
+                    refreshAvailableAppts(); refreshMyAppts(); refreshMyBooked(); refreshMyProps();
+                    startStatusChecker();
+                    cardLayout.show(mainPanel, "user");
+                } else {
+                    msg("Invalid credentials!");
+                }
                 break;
 
             case "GO_REGISTER":
@@ -2094,34 +1664,13 @@ private void deleteMybooked() {
                 break;
 
             case "SUBMIT":
-                String name      = nameField.getText().trim();
-                String regEmail  = emailRegField.getText().trim();
-                String regPass   = new String(passRegField.getPassword());
-                if (name.isEmpty() || regEmail.isEmpty() || regPass.isEmpty()) {
-                    msg("Fill all fields."); break;
-                }
-                  String emailError1 = user.validateEmail(regEmail);
-                if (emailError1 != null) { msg(emailError1); break; }
-                if (regPass.length() < 4) {
-                    msg("Password must be at least 4 characters!"); break;
-                }
-                
-                loadData();
-                for (user u : customList) {
-                    if (u.getName().equalsIgnoreCase(name)) {
-                        msg("This name is already registered!"); return;
-                    }
-                    if (u.getEmail().equalsIgnoreCase(regEmail)) {
-                        msg("This email is already registered!"); return;
-                    }
-                }
-                String uid = "USR" + String.format("%03d", customList.size() + 1);
-                customList.add(new user(uid, name, regEmail, regPass));
-                mangfile.saveToFile(mangfile.FileType.CUSTOMER, customList);
+                String error = service.registerUser(
+                    nameField.getText().trim(),
+                    emailRegField.getText().trim(),
+                    new String(passRegField.getPassword()));
+                if (error != null) { msg(error); break; }
                 msg("Registration successful!");
-                nameField.setText("");
-                emailRegField.setText("");
-                passRegField.setText("");
+                nameField.setText(""); emailRegField.setText(""); passRegField.setText("");
                 cardLayout.show(mainPanel, "login");
                 break;
 
@@ -2130,7 +1679,10 @@ private void deleteMybooked() {
                 break;
 
             case "LOGOUT":
-                if (confirm("Logout?")) cardLayout.show(mainPanel, "login");
+                if (confirm("Logout?")) {
+                    currentUser = null;
+                    cardLayout.show(mainPanel, "login");
+                }
                 break;
         }
     }
