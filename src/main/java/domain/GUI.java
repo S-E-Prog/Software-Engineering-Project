@@ -1588,7 +1588,7 @@ class InnerGUI extends JFrame implements ActionListener {
         checker.setDaemon(true);
         checker.start();
     }
-
+// reminder here to edit
     private final HashSet<String> notifiedAppointments = new HashSet<>();
 
     private void startReminderChecker() {
