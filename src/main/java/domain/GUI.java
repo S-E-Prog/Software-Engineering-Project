@@ -827,8 +827,7 @@ private time buildTimeFromInputs(String dateStr, String timeStr, int durationMin
 }
 
 
-private int parseAndValidateDuration(String endStr,
-                                     appointment.AppointmentType selType) {
+private int parseAndValidateDuration(String endStr, appointment.AppointmentType selType) {
     int endMin;
     try {
         endMin = Integer.parseInt(endStr);
