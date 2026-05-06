@@ -1583,39 +1583,76 @@ private void showUserEditAppointmentDialog() {
     //  USER PANEL — ACTIONS
     // ================================================================
 
-    private void bookAppointment() {
-        int row = availableApptTable.getSelectedRow();
-        if (row < 0) { msg("Please select an appointment to book."); return; }
-        String id = (String) availableApptModel.getValueAt(row, 0);
-
-        for (appointment a : appointmentsList) {
-            if (!a.getAppointmentId().equals(id)) continue;
-            if (a.isBookedBy(currentUser)) {
-                msg("You already booked this appointment!"); return;
-            }
-            if (a.getStatus() != appointment.AppointmentStatus.AVAILABLE) {
-                msg("This appointment is no longer available."); return;
-            }
-         //In case an error occurs and the completed version is displayed
-            String bookingError = a.validateBookingAllowed();
-            if (bookingError != null) { msg(bookingError); return; }
-            int cap      = a.getEffectiveMaxParticipants();
-            int bookings = a.getBookingCount();
-            if (bookings >= cap) {
-                msg("This appointment is fully booked!"); return;
-            }
-
-            if (confirm("Book this appointment?")) {
-                a.addBooking(currentUser);
-                if (a.getBookingCount() >= cap) a.confirm();
-                mangfile.saveToFile(mangfile.FileType.APPOINTMENT, appointmentsList);
-                msg("Appointment booked successfully!");
-                refreshAvailableAppts();
-                refreshMyBooked();
-            }
-            return;
+private appointment findAppointmentById(String id) {
+    for (appointment a : appointmentsList) {
+        if (a.getAppointmentId().equals(id)) {
+            return a;
         }
     }
+    return null;
+}
+
+private boolean canBook(appointment a) {
+    if (a.isBookedBy(currentUser)) {
+        msg("You already booked this appointment!");
+        return false;
+    }
+
+    if (a.getStatus() != appointment.AppointmentStatus.AVAILABLE) {
+        msg("This appointment is no longer available.");
+        return false;
+    }
+
+    String bookingError = a.validateBookingAllowed();
+    if (bookingError != null) {
+        msg(bookingError);
+        return false;
+    }
+
+    return true;
+}
+
+private void performBooking(appointment a, int cap) {
+    a.addBooking(currentUser);
+
+    if (a.getBookingCount() >= cap) {
+        a.confirm();
+    }
+
+    mangfile.saveToFile(mangfile.FileType.APPOINTMENT, appointmentsList);
+    msg("Appointment booked successfully!");
+    refreshAvailableAppts();
+    refreshMyBooked();
+}
+
+
+
+
+private void bookAppointment() {
+    int row = availableApptTable.getSelectedRow();
+    if (row < 0) {
+        msg("Please select an appointment to book.");
+        return;
+    }
+
+    String id = (String) availableApptModel.getValueAt(row, 0);
+    appointment a = findAppointmentById(id);
+
+    if (a == null) return;
+
+    if (!canBook(a)) return;
+
+    int cap = a.getEffectiveMaxParticipants();
+
+    if (a.getBookingCount() >= cap) {
+        msg("This appointment is fully booked!");
+        return;
+    }
+
+    if (confirm("Book this appointment?")) {
+        performBooking(a, cap);
+    }
+}
 
     private void cancelMyBooking() {
         int row = myBookedTable.getSelectedRow();
@@ -1639,12 +1676,13 @@ private void showUserEditAppointmentDialog() {
             return;
         }
     }
-
+private boolean ifended(appointment a) {return a.getStatus() == appointment.AppointmentStatus.CANCELLED
+                    || a.getStatus() == appointment.AppointmentStatus.COMPLETED;}
     private void checkAndUpdateAppointmentStatuses() {
         boolean changed = false;
+
         for (appointment a : appointmentsList) {
-            if (a.getStatus() == appointment.AppointmentStatus.CANCELLED
-                    || a.getStatus() == appointment.AppointmentStatus.COMPLETED) continue;
+            if (ifended(a)) continue;
 
           
             if (a.getStatus() == appointment.AppointmentStatus.CONFIRMED && a.isExpired()) {

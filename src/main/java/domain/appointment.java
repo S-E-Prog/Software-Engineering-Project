@@ -61,12 +61,21 @@ public class appointment implements Serializable {
 		public int     getMaxDurationMinutes()             { return maxDurationMinutes; }
 		public int     getMaxParticipants()               { return maxParticipants; }
 		public boolean canBeVirtual()                     { return canBeVirtual; }
+		
+public String getRulesSummary() {
+    String base = String.format(
+        "<html>Max duration: %d min\nMax participants: %d\nCan be Virtual: %s</html>",
+        maxDurationMinutes,
+        maxParticipants,
+        canBeVirtual ? "Yes" : "No"
+    );
 
-		public String getRulesSummary() {
-			String base = String.format("<html>Max duration: %d min \n Max participants: %d \n Can be Virtual: %s<html>", maxDurationMinutes, maxParticipants, canBeVirtual ? "Yes" : "No<html>");
-			if (this == URGENT) base += " <html>\n Must be within 1 week from today<html>";
-			return base;
-		}
+    if (this == URGENT) {
+        base += "<br/>Must be within 1 week from today";
+    }
+
+    return base;
+}
 
 		@Override public String toString() { return displayName; }
 	}

@@ -232,4 +232,32 @@ class appointmentTest {
     void testIsExpiredFalseForFutureAppointment() {
         assertFalse(appt.isExpired());
     }
+
+      @Test
+    void testRulesSummary_Urgent() {
+  
+        String result = appointment.AppointmentType.URGENT.getRulesSummary();
+
+        // Assert
+        assertTrue(result.contains("Max duration: 15"));
+        assertTrue(result.contains("Max participants: 1"));
+        assertTrue(result.contains("Can be Virtual: No"));
+
+  
+        assertTrue(result.contains("Must be within 1 week"));
+    }
+
+    @Test
+    void testRulesSummary_NonUrgent() {
+        
+        String result = appointment.AppointmentType.FOLLOW_UP.getRulesSummary();
+
+       
+        assertTrue(result.contains("Max duration: 30"));
+        assertTrue(result.contains("Max participants: 1"));
+        assertTrue(result.contains("Can be Virtual: Yes"));
+
+      
+        assertFalse(result.contains("Must be within 1 week"));
+    }
 }
