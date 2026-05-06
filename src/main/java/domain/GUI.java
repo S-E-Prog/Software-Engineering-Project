@@ -6,7 +6,6 @@ import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import io.github.cdimascio.dotenv.Dotenv;
-import service.EmailNotification;
 import service.EmailService;
 import java.awt.event.*;
 import java.io.Serializable;
@@ -21,6 +20,10 @@ public class GUI implements Serializable {
 }
 
 class InnerGUI extends JFrame implements ActionListener {
+    private static final String LOGIN = "login";
+    private static final String REGISTER = "register";
+    private static final String ADMIN = "admin";
+    private static final String USER = "user";
 
     private JPanel mainPanel;
     private CardLayout cardLayout;
@@ -91,10 +94,10 @@ class InnerGUI extends JFrame implements ActionListener {
         cardLayout = new CardLayout();
         mainPanel  = new JPanel(cardLayout);
 
-        mainPanel.add(buildLoginPanel(),    "login");
-        mainPanel.add(buildRegisterPanel(), "register");
-        mainPanel.add(buildAdminPanel(),    "admin");
-        mainPanel.add(buildUserPanel(),     "user");
+        mainPanel.add(buildLoginPanel(),    LOGIN);
+        mainPanel.add(buildRegisterPanel(), REGISTER);
+        mainPanel.add(buildAdminPanel(),    ADMIN);
+        mainPanel.add(buildUserPanel(),     USER);
 
         add(mainPanel);
 
@@ -179,8 +182,8 @@ class InnerGUI extends JFrame implements ActionListener {
 
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.CENTER, 15, 0));
         buttons.setBackground(PANEL_BG);
-        buttons.add(btn("Create Account", "GO_REGISTER", BLUE));
-        buttons.add(btn("Login",          "LOGIN",       PRIMARY));
+        buttons.add(btn("Create Account", REGISTER, BLUE));
+        buttons.add(btn(LOGIN,          LOGIN,       PRIMARY));
 
         panel.add(title,   BorderLayout.NORTH);
         panel.add(form,    BorderLayout.CENTER);
@@ -804,104 +807,141 @@ private void showAddAppointmentDialog() {
     // ================================================================
     //  USER — EDIT MY APPOINTMENT DIALOG
     // ================================================================
-    private void showUserEditAppointmentDialog() {
-        if (currentUser == null) return;
-        int row = myApptTable.getSelectedRow();
-        if (row < 0) { msg("Please select an appointment first."); return; }
-        String id = (String) myApptModel.getValueAt(row, 0);
-        appointment appt = appointmentsList.stream()
-            .filter(a -> a.getAppointmentId().equals(id)
-                && a.getProperty().getOwner() != null
-                && a.getProperty().getOwner().getId().equals(currentUser.getId()))
-            .findFirst().orElse(null);
-        if (appt == null) { msg("Appointment not found or not yours!"); return; }
-        if (appt.getStatus() == appointment.AppointmentStatus.CANCELLED ||
-            appt.getStatus() == appointment.AppointmentStatus.COMPLETED) {
-            msg("Cannot edit a cancelled or completed appointment."); return;
+    private appointment findOwnedAppointment(String id) {
+    return appointmentsList.stream()
+        .filter(a -> a.getAppointmentId().equals(id)
+            && a.getProperty().getOwner() != null
+            && a.getProperty().getOwner().getId().equals(currentUser.getId()))
+        .findFirst().orElse(null);
+}
+
+
+private time buildTimeFromInputs(String dateStr, String timeStr, int durationMin) {
+    String[] dp = dateStr.split("-");
+    String[] tp = timeStr.split(":");
+    time t = new time();
+    t.setdate(Integer.parseInt(tp[0]), Integer.parseInt(tp[1]),
+              Integer.parseInt(dp[2]), Integer.parseInt(dp[1]), Integer.parseInt(dp[0]));
+    t.setenddate(durationMin);
+    return t;
+}
+
+
+private int parseAndValidateDuration(String endStr,
+                                     appointment.AppointmentType selType) {
+    int endMin;
+    try {
+        endMin = Integer.parseInt(endStr);
+    } catch (NumberFormatException ex) {
+        msg("Duration must be a number.");
+        return -1;
+    }
+    if (endMin < 1 || endMin > selType.getMaxDurationMinutes()) {
+        msg("Duration for " + selType.getDisplayName()
+                + " must be between 1 and " + selType.getMaxDurationMinutes() + " minutes.");
+        return -1;
+    }
+    return endMin;
+}
+
+private void showUserEditAppointmentDialog() {
+    if (currentUser == null) return;
+
+    int row = myApptTable.getSelectedRow();
+    if (row < 0) { msg("Please select an appointment first."); return; }
+
+    String id = (String) myApptModel.getValueAt(row, 0);
+    appointment appt = findOwnedAppointment(id);          // extracted
+
+    if (appt == null) { msg("Appointment not found or not yours!"); return; }
+    if (appt.getStatus() == appointment.AppointmentStatus.CANCELLED ||
+        appt.getStatus() == appointment.AppointmentStatus.COMPLETED) {
+        msg("Cannot edit a cancelled or completed appointment."); return;
+    }
+
+    JDialog dlg = new JDialog(this, "Edit My Appointment", true);
+    dlg.setSize(480, 360);
+    dlg.setLocationRelativeTo(this);
+    dlg.setLayout(new BorderLayout());
+
+    JPanel form = new JPanel(new GridBagLayout());
+    form.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+    GridBagConstraints g = new GridBagConstraints();
+    g.fill   = GridBagConstraints.HORIZONTAL;
+    g.insets = new Insets(6, 6, 6, 6);
+
+    time curTime = appt.getAppointmentTime();
+    String curDate = curTime.getdatetime().format(java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy"));
+    String curHM   = curTime.getdatetime().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
+
+    JTextField tfDate    = new JTextField(curDate, 20);
+    JTextField tfTime    = new JTextField(curHM,   20);
+    JTextField tfEndTime = new JTextField("30",    20);
+    tfDate.setToolTipText("Format: dd-MM-yyyy");
+    tfTime.setToolTipText("Format: HH:mm");
+    tfEndTime.setToolTipText("Duration in minutes (limit depends on type)");
+
+    String[] typeNames = Arrays.stream(appointment.AppointmentType.values())
+        .map(appointment.AppointmentType::getDisplayName).toArray(String[]::new);
+    JComboBox<String> typeCombo = new JComboBox<>(typeNames);
+    typeCombo.setSelectedItem(appt.getType().getDisplayName());
+
+    JLabel rulesLabel = new JLabel(appt.getType().getRulesSummary());
+    rulesLabel.setForeground(Color.RED);
+    typeCombo.addActionListener(ev -> {
+        appointment.AppointmentType sel =
+            appointment.AppointmentType.values()[typeCombo.getSelectedIndex()];
+        rulesLabel.setText(sel.getRulesSummary());
+    });
+
+    g.gridx = 0; g.gridy = 0; form.add(new JLabel("Type:"),              g); g.gridx = 1; form.add(typeCombo,  g);
+    g.gridx = 0; g.gridy = 1; g.gridwidth = 3;                               form.add(rulesLabel, g); g.gridwidth = 1;
+    g.gridx = 0; g.gridy = 2; form.add(new JLabel("Date (dd-MM-yyyy):"), g); g.gridx = 1; form.add(tfDate,    g);
+    g.gridx = 0; g.gridy = 3; form.add(new JLabel("Time (HH:mm):"),      g); g.gridx = 1; form.add(tfTime,    g);
+    g.gridx = 0; g.gridy = 4; form.add(new JLabel("Duration (mm):"),     g); g.gridx = 1; form.add(tfEndTime, g);
+
+    JPanel btns = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
+    JButton save   = new JButton("Save");
+    JButton cancel = new JButton("Cancel");
+    style(save, PRIMARY); style(cancel, GRAY_BTN);
+
+    save.addActionListener(e -> {
+        String dateStr = tfDate.getText().trim();
+        String timeStr = tfTime.getText().trim();
+        String endStr  = tfEndTime.getText().trim();
+        if (dateStr.isEmpty() || timeStr.isEmpty() || endStr.isEmpty()) {
+            msg("Please fill all fields!"); return;
         }
 
-        JDialog dlg = new JDialog(this, "Edit My Appointment", true);
-        dlg.setSize(480, 360);
-        dlg.setLocationRelativeTo(this);
-        dlg.setLayout(new BorderLayout());
+        appointment.AppointmentType selType =
+            appointment.AppointmentType.values()[typeCombo.getSelectedIndex()];
 
-        JPanel form = new JPanel(new GridBagLayout());
-        form.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
-        GridBagConstraints g = new GridBagConstraints();
-        g.fill   = GridBagConstraints.HORIZONTAL;
-        g.insets = new Insets(6, 6, 6, 6);
+        int endMin = parseAndValidateDuration(endStr, selType);  // extracted
+        if (endMin < 0) return;
 
-        time curTime = appt.getAppointmentTime();
-        String curDate = curTime.getdatetime().format(java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy"));
-        String curHM   = curTime.getdatetime().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"));
+        try {
+            time t         = buildTimeFromInputs(dateStr, timeStr, endMin);  // extracted
+            String timeErr = appointment.validateAppointmentTime(t.getdatetime(), selType);
+            if (timeErr != null) { msg(timeErr); return; }
 
-        JTextField tfDate    = new JTextField(curDate, 20);
-        JTextField tfTime    = new JTextField(curHM, 20);
-        JTextField tfEndTime = new JTextField("30", 20);
-        tfDate.setToolTipText("Format: dd-MM-yyyy");
-        tfTime.setToolTipText("Format: HH:mm");
-        tfEndTime.setToolTipText("Duration in minutes (limit depends on type)");
+            appt.setAppointmentTime(t);
+            appt.setType(selType);
+            mangfile.saveToFile(mangfile.FileType.APPOINTMENT, appointmentsList);
+            refreshMyAppts();
+            refreshAvailableAppts();
+            msg("Appointment updated successfully!");
+            dlg.dispose();
+        } catch (Exception ex) {
+            msg("Invalid format. Use dd-MM-yyyy and HH:mm");
+        }
+    });
 
-        String[] typeNames = java.util.Arrays.stream(appointment.AppointmentType.values())
-            .map(appointment.AppointmentType::getDisplayName).toArray(String[]::new);
-        JComboBox<String> typeCombo = new JComboBox<>(typeNames);
-        typeCombo.setSelectedItem(appt.getType().getDisplayName());
-
-        JLabel rulesLabel = new JLabel( appt.getType().getRulesSummary() );
-        rulesLabel.setForeground(Color.RED);
-        typeCombo.addActionListener(ev -> {
-            appointment.AppointmentType sel = appointment.AppointmentType.values()[typeCombo.getSelectedIndex()];
-            rulesLabel.setText( sel.getRulesSummary() );
-        });
-
-        g.gridx = 0; g.gridy = 0; form.add(new JLabel("Type:"),              g); g.gridx = 1; form.add(typeCombo,  g);
-        g.gridx = 0; g.gridy = 1; g.gridwidth = 3;                               form.add(rulesLabel, g); g.gridwidth = 1;
-        g.gridx = 0; g.gridy = 2; form.add(new JLabel("Date (dd-MM-yyyy):"), g); g.gridx = 1; form.add(tfDate,    g);
-        g.gridx = 0; g.gridy = 3; form.add(new JLabel("Time (HH:mm):"),      g); g.gridx = 1; form.add(tfTime,    g);
-        g.gridx = 0; g.gridy = 4; form.add(new JLabel("Duration (mm):"),     g); g.gridx = 1; form.add(tfEndTime, g);
-
-        JPanel btns = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
-        JButton save = new JButton("Save"); JButton cancel = new JButton("Cancel");
-        style(save, PRIMARY); style(cancel, GRAY_BTN);
-
-        save.addActionListener(e -> {
-            String dateStr = tfDate.getText().trim();
-            String timeStr = tfTime.getText().trim();
-            String endStr  = tfEndTime.getText().trim();
-            if (dateStr.isEmpty() || timeStr.isEmpty() || endStr.isEmpty()) {
-                msg("Please fill all fields!"); return;
-            }
-            appointment.AppointmentType selType = appointment.AppointmentType.values()[typeCombo.getSelectedIndex()];
-            int endMin;
-            try { endMin = Integer.parseInt(endStr); } catch (NumberFormatException ex) { msg("Duration must be a number."); return; }
-            if (endMin < 1 || endMin > selType.getMaxDurationMinutes()) {
-                msg("Duration for " + selType.getDisplayName() + " must be between 1 and " + selType.getMaxDurationMinutes() + " minutes."); return;
-            }
-            try {
-                String[] dp = dateStr.split("-"); String[] tp = timeStr.split(":");
-                time t = new time();
-                t.setdate(Integer.parseInt(tp[0]), Integer.parseInt(tp[1]),
-                          Integer.parseInt(dp[2]), Integer.parseInt(dp[1]), Integer.parseInt(dp[0]));
-                t.setenddate(endMin);
-                String timeError = appointment.validateAppointmentTime(t.getdatetime(), selType);
-                if (timeError != null) { msg(timeError); return; }
-                appt.setAppointmentTime(t);
-                appt.setType(selType);
-                mangfile.saveToFile(mangfile.FileType.APPOINTMENT, appointmentsList);
-                refreshMyAppts();
-                refreshAvailableAppts();
-                msg("Appointment updated successfully!");
-                dlg.dispose();
-            } catch (Exception ex) {
-                msg("Invalid format. Use dd-MM-yyyy and HH:mm");
-            }
-        });
-        cancel.addActionListener(e -> dlg.dispose());
-        btns.add(save); btns.add(cancel);
-        dlg.add(form, BorderLayout.CENTER);
-        dlg.add(btns, BorderLayout.SOUTH);
-        dlg.setVisible(true);
-    }
+    cancel.addActionListener(e -> dlg.dispose());
+    btns.add(save); btns.add(cancel);
+    dlg.add(form, BorderLayout.CENTER);
+    dlg.add(btns, BorderLayout.SOUTH);
+    dlg.setVisible(true);
+}
 
     // ================================================================
     //  ADD PROPERTY DIALOG
@@ -1270,7 +1310,7 @@ private void showAddAppointmentDialog() {
         logoutBtn.addActionListener(e -> {
             if (confirm("Logout?")) {
                 currentUser = null;
-                cardLayout.show(mainPanel, "login");
+                cardLayout.show(mainPanel, LOGIN);
             }
         });
         header.add(logoutBtn, BorderLayout.EAST);
@@ -2059,7 +2099,7 @@ private void deleteMybooked() {
     public void actionPerformed(ActionEvent e) {
         switch (e.getActionCommand()) {
 
-            case "LOGIN":
+            case LOGIN:
                 loadData();
                 String email = emailField.getText().trim();
                 String pass  = new String(passField.getPassword());
@@ -2122,15 +2162,15 @@ private void deleteMybooked() {
                 nameField.setText("");
                 emailRegField.setText("");
                 passRegField.setText("");
-                cardLayout.show(mainPanel, "login");
+                cardLayout.show(mainPanel, LOGIN);
                 break;
 
             case "BACK":
-                cardLayout.show(mainPanel, "login");
+                cardLayout.show(mainPanel, LOGIN);
                 break;
 
             case "LOGOUT":
-                if (confirm("Logout?")) cardLayout.show(mainPanel, "login");
+                if (confirm("Logout?")) cardLayout.show(mainPanel, LOGIN);
                 break;
         }
     }
