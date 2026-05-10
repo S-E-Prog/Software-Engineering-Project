@@ -78,7 +78,7 @@ public class time implements Serializable {
         return now.format(dateformat);
     }
 
-    public boolean equal(time t) {
+    public boolean isSameTime(time t) {
         if (this.toString().equals(t.toString()))
             return true;
         return false;

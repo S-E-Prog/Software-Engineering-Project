@@ -1715,7 +1715,9 @@ private boolean ifended(appointment a) {return a.getStatus() == appointment.Appo
     private void startStatusChecker() {
         Thread checker = new Thread(() -> {
             while (currentUser != null) {
-                try { Thread.sleep(60000); } catch (InterruptedException ex) { break; }
+                try { Thread.sleep(60000); } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                     break; }
                 SwingUtilities.invokeLater(() -> {
                     if (currentUser == null) return;
                     loadData();
@@ -1772,12 +1774,7 @@ private void startReminderChecker() {
                     emailService.sendEmail(u.getEmail(), subject, body);
 
                  
-                   /* SwingUtilities.invokeLater(() ->
-                        JOptionPane.showMessageDialog(null,
-                            "Reminder! Appointment for: " + appt.getProperty().getName()
-                            + "\nStarts in less than 5 minutes!",
-                            "Appointment Reminder",
-                            JOptionPane.INFORMATION_MESSAGE));*/
+                   
                 }
             }
         }

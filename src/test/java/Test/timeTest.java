@@ -91,7 +91,7 @@ class timeTest {
         LocalDateTime future = LocalDateTime.now().plusDays(3);
         t.setdate(9, 0, future.getDayOfMonth(), future.getMonthValue(), future.getYear());
         t2.setdate(9, 0, future.getDayOfMonth(), future.getMonthValue(), future.getYear());
-        assertTrue(t.equal(t2));
+        assertTrue(t.isSameTime(t2));
     }
 
     @Test
@@ -100,6 +100,6 @@ class timeTest {
         LocalDateTime future = LocalDateTime.now().plusDays(3);
         t.setdate(9, 0, future.getDayOfMonth(), future.getMonthValue(), future.getYear());
         t2.setdate(10, 0, future.getDayOfMonth(), future.getMonthValue(), future.getYear());
-        assertFalse(t.equal(t2));
+        assertFalse(t.isSameTime(t2));
     }
 }
