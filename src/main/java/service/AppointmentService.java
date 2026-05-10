@@ -29,7 +29,7 @@ public class AppointmentService {
         for (appointment a : appointments) {
             // 🔧 FIX: فحص AVAILABLE و CONFIRMED معاً لمنع الحجز المكرر
             if (a.getProperty().getPropertyId().equals(property.getPropertyId()) &&
-                    a.getAppointmentTime().equal(time) &&
+                    a.getAppointmentTime().isSameTime(time) &&
                     (a.getStatus() == appointment.AppointmentStatus.CONFIRMED ||
                             a.getStatus() == appointment.AppointmentStatus.AVAILABLE)) {
                 System.out.println("Slot already booked!");
@@ -92,7 +92,7 @@ public class AppointmentService {
         for (appointment a : appointments) {
             // 🔧 FIX: مقارنة بالـ ID بدل equals() الافتراضية
             if (a.getProperty().getPropertyId().equals(property.getPropertyId()) &&
-                    a.getAppointmentTime().equal(time) &&
+                    a.getAppointmentTime().isSameTime(time) &&
                     (a.getStatus() == appointment.AppointmentStatus.CONFIRMED ||
                             a.getStatus() == appointment.AppointmentStatus.AVAILABLE)) {
                 return false;
