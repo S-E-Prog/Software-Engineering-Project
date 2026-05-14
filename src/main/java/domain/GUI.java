@@ -2163,8 +2163,8 @@ private void deleteMybooked() {
                 if (!found) msg("Invalid credentials!");
                 break;
 
-            case "GO_REGISTER":
-                cardLayout.show(mainPanel, "register");
+            case REGISTER:
+                cardLayout.show(mainPanel, REGISTER);
                 break;
 
             case "SUBMIT":
